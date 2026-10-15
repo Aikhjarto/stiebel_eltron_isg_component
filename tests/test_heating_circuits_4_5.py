@@ -7,6 +7,7 @@ they are registered disabled, and an owner of the extension module enables them.
 """
 
 from types import SimpleNamespace
+from unittest.mock import PropertyMock
 
 from homeassistant.const import STATE_UNAVAILABLE
 from homeassistant.core import HomeAssistant
@@ -22,6 +23,8 @@ from custom_components.stiebel_eltron_isg.const import (
     ACTUAL_ROOM_TEMPERATURE_HK3,
     ACTUAL_ROOM_TEMPERATURE_HK4,
     ACTUAL_ROOM_TEMPERATURE_HK5,
+    ACTUAL_TEMPERATURE_HK4,
+    ACTUAL_TEMPERATURE_HK5,
     DEWPOINT_TEMPERATURE_HK3,
     DEWPOINT_TEMPERATURE_HK4,
     DEWPOINT_TEMPERATURE_HK5,
@@ -29,12 +32,15 @@ from custom_components.stiebel_eltron_isg.const import (
     TARGET_ROOM_TEMPERATURE_HK3,
     TARGET_ROOM_TEMPERATURE_HK4,
     TARGET_ROOM_TEMPERATURE_HK5,
+    TARGET_TEMPERATURE_HK4,
+    TARGET_TEMPERATURE_HK5,
 )
 from custom_components.stiebel_eltron_isg.entity import build_unique_id
 from custom_components.stiebel_eltron_isg.sensor import (
     SYSTEM_VALUES_SENSOR_TYPES,
     WPM_3I_SENSOR_TYPES,
     WPM_SENSOR_TYPES,
+    WPMSYSTEM_HEATING_CIRCUIT_4_5_FLOW_SENSOR_TYPES,
     WPMSYSTEM_SENSOR_TYPES,
 )
 
@@ -57,6 +63,12 @@ HK5_KEYS = (
     DEWPOINT_TEMPERATURE_HK5,
 )
 OPTIONAL_KEYS = HK4_KEYS + HK5_KEYS
+FLOW_KEYS = (
+    ACTUAL_TEMPERATURE_HK4,
+    TARGET_TEMPERATURE_HK4,
+    ACTUAL_TEMPERATURE_HK5,
+    TARGET_TEMPERATURE_HK5,
+)
 
 
 def room(actual, target, humidity, dew_point) -> SimpleNamespace:
@@ -217,3 +229,156 @@ async def test_enabled_sensor_with_extension_board_shows_its_value(
 
     assert float(hass.states.get(entity_ids[ACTUAL_ROOM_TEMPERATURE_HK4]).state) == 23.0
     assert float(hass.states.get(entity_ids[DEWPOINT_TEMPERATURE_HK5]).state) == 10.7
+
+
+def flow(actual_4, set_4, actual_5, set_5) -> SimpleNamespace:
+    """The library block WpmHeatingCircuit45Values."""
+    return SimpleNamespace(
+        actual_temperature_hk_4=actual_4,
+        set_temperature_hk_4=set_4,
+        actual_temperature_hk_5=actual_5,
+        set_temperature_hk_5=set_5,
+    )
+
+
+def test_hk4_and_hk5_flow_sensors_are_opt_in() -> None:
+    """The flow temperatures of circuits 4 and 5 are disabled by default."""
+    descriptions = _descriptions_by_key(WPMSYSTEM_HEATING_CIRCUIT_4_5_FLOW_SENSOR_TYPES)
+    assert set(descriptions) == set(FLOW_KEYS)
+    for description in descriptions.values():
+        assert description.entity_registry_enabled_default is False
+
+
+def test_hk4_and_hk5_flow_sensors_read_their_own_fields() -> None:
+    """Each flow sensor reads its field of the circuit 4/5 library block."""
+    api = SimpleNamespace(heating_circuit_4_5_values=flow(28.2, 29.3, 25.5, 25.6))
+    descriptions = _descriptions_by_key(WPMSYSTEM_HEATING_CIRCUIT_4_5_FLOW_SENSOR_TYPES)
+    values = [descriptions[key].modbus_register(api) for key in FLOW_KEYS]
+    assert values == [28.2, 29.3, 25.5, 25.6]
+
+
+def test_hk4_and_hk5_flow_sensors_tolerate_a_library_without_the_block() -> None:
+    """A pystiebeleltron release without the block reads no value instead of failing."""
+    api = SimpleNamespace()
+    for description in WPMSYSTEM_HEATING_CIRCUIT_4_5_FLOW_SENSOR_TYPES:
+        assert description.modbus_register(api) is None
+
+
+def test_hk4_and_hk5_flow_sensors_reject_unknown_fields() -> None:
+    """Only a missing block is tolerated, a misspelt field of a present block raises."""
+    api = SimpleNamespace(heating_circuit_4_5_values=SimpleNamespace())
+    for description in WPMSYSTEM_HEATING_CIRCUIT_4_5_FLOW_SENSOR_TYPES:
+        with pytest.raises(AttributeError):
+            description.modbus_register(api)
+
+
+@pytest.mark.parametrize(
+    "descriptions",
+    [WPM_SENSOR_TYPES, WPMSYSTEM_SENSOR_TYPES, WPM_3I_SENSOR_TYPES],
+    ids=["wpm3", "wpmsystem_base", "wpm3i"],
+)
+def test_hk4_and_hk5_flow_sensors_are_not_in_shared_lists(descriptions) -> None:
+    """The flow registers were only measured on a WPMsystem, which adds them separately."""
+    assert not set(FLOW_KEYS) & set(_descriptions_by_key(descriptions))
+
+
+@pytest.mark.parametrize("model", [ControllerModel.WPM_3, ControllerModel.LWZ_R290])
+async def test_other_wpm_models_get_no_hk4_and_hk5_flow_sensors(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    mock_get_controller_model,
+    mock_wpm_api,
+    model,
+) -> None:
+    """WPM 3 and LWZ_R290 share the WPM map but get no flow sensors for circuits 4 and 5."""
+    mock_get_controller_model.return_value = model
+    mock_wpm_api.system_values.room_temperatures = [
+        *HK1_TO_HK3,
+        NOT_AVAILABLE,
+        NOT_AVAILABLE,
+    ]
+    mock_config_entry.add_to_hass(hass)
+
+    assert await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    registry = er.async_get(hass)
+    for key in FLOW_KEYS:
+        entity_id = registry.async_get_entity_id(
+            "sensor", DOMAIN, build_unique_id(mock_config_entry, key)
+        )
+        assert entity_id is None, key
+
+
+async def test_wpmsystem_registers_hk4_and_hk5_flow_sensors_disabled(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    mock_get_controller_model,
+    mock_wpm_api,
+) -> None:
+    """A WPMsystem registers the flow sensors, disabled until the owner enables them."""
+    mock_get_controller_model.return_value = ControllerModel.WPMsystem
+    mock_wpm_api.system_values.room_temperatures = [
+        *HK1_TO_HK3,
+        NOT_AVAILABLE,
+        NOT_AVAILABLE,
+    ]
+    mock_config_entry.add_to_hass(hass)
+
+    assert await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    registry = er.async_get(hass)
+    for key in FLOW_KEYS:
+        entity_id = registry.async_get_entity_id(
+            "sensor", DOMAIN, build_unique_id(mock_config_entry, key)
+        )
+        assert entity_id is not None, key
+        entry = registry.async_get(entity_id)
+        assert entry.disabled_by is er.RegistryEntryDisabler.INTEGRATION, key
+        assert hass.states.get(entity_id) is None, key
+
+
+@pytest.mark.parametrize(
+    "case",
+    [
+        (flow(28.2, 29.3, 25.5, 25.6), ["28.2", "29.3", "25.5", "25.6"]),
+        (flow(None, None, None, None), [STATE_UNAVAILABLE] * 4),
+        (None, [STATE_UNAVAILABLE] * 4),
+    ],
+    ids=["extension_module", "no_extension_module", "library_without_block"],
+)
+async def test_enabled_hk4_and_hk5_flow_sensors(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    mock_get_controller_model,
+    mock_wpm_api,
+    case,
+) -> None:
+    """Enabled flow sensors show their values, or stay unavailable without breaking setup."""
+    block, expected = case
+    mock_get_controller_model.return_value = ControllerModel.WPMsystem
+    mock_wpm_api.system_values.room_temperatures = [
+        *HK1_TO_HK3,
+        NOT_AVAILABLE,
+        NOT_AVAILABLE,
+    ]
+    if block is not None:
+        type(mock_wpm_api).heating_circuit_4_5_values = PropertyMock(return_value=block)
+    mock_config_entry.add_to_hass(hass)
+    registry = er.async_get(hass)
+    entity_ids = [
+        registry.async_get_or_create(
+            "sensor",
+            DOMAIN,
+            build_unique_id(mock_config_entry, key),
+            config_entry=mock_config_entry,
+            suggested_object_id=key,
+        ).entity_id
+        for key in FLOW_KEYS
+    ]
+
+    assert await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    assert [hass.states.get(entity_id).state for entity_id in entity_ids] == expected

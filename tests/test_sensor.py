@@ -100,6 +100,7 @@ from custom_components.stiebel_eltron_isg.sensor import (
     WPM_SENSOR_TYPES,
     WPMSYSTEM_COOLING_EFFICIENCY_SENSOR_TYPES,
     WPMSYSTEM_COOLING_SENSOR_TYPES,
+    WPMSYSTEM_HEATING_CIRCUIT_4_5_FLOW_SENSOR_TYPES,
     WPMSYSTEM_HEATING_EFFICIENCY_SENSOR_TYPES,
     WPMSYSTEM_RUNTIME_SENSOR_TYPES,
     WPMSYSTEM_SENSOR_TYPES,
@@ -301,6 +302,10 @@ async def test_setup_omits_unsupported_wpmsystem_aggregate_runtime_sensors() -> 
         | {description.key for description in WPMSYSTEM_HEATING_EFFICIENCY_SENSOR_TYPES}
         | {description.key for description in WPMSYSTEM_COOLING_EFFICIENCY_SENSOR_TYPES}
         | {description.key for description in WPMSYSTEM_RUNTIME_SENSOR_TYPES}
+        | {
+            description.key
+            for description in WPMSYSTEM_HEATING_CIRCUIT_4_5_FLOW_SENSOR_TYPES
+        }
     )
     assert len(entity_keys) == len(set(entity_keys))
 
