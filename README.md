@@ -138,6 +138,14 @@ WPMsystem also offers runtime counters: **Compressor Heating Heat Pump 1**,
 two count heat pump 1 only. A hot water runtime is not offered yet because it
 has not been verified on hardware.
 
+## SG Ready and the climate targets
+
+In SG Ready states 3 (start-up recommendation) and 4 (forced start-up) a WPM heats each circuit to its SG Ready load temperature instead of the comfort or eco temperature.
+On WPM, WPMsystem and LWZ R290 the climate entities of heating circuits 1 to 3 then show that load temperature as their target, and setting a target changes the load temperature.
+In the other states they show the comfort or eco temperature as before.
+
+Heating circuit 1 is the exception when a buffer cylinder is configured: its load temperature ("HC1 / buffer" in the ISG) is then the buffer temperature, not a room temperature, so its climate entity keeps showing the comfort or eco temperature.
+
 ## Automation example
 
 Use the [heat pump fault notification blueprint](blueprints/automation/heat_pump_fault.yaml)
