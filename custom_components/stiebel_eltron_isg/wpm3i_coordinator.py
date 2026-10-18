@@ -8,8 +8,8 @@ import logging
 
 from homeassistant.core import HomeAssistant
 from modbus_connection import ModbusUnit
-from pystiebeleltron import ControllerModel
-from pystiebeleltron.wpm3i import Wpm3iStiebelEltronAPI
+from ._vendor.pystiebeleltron import ControllerModel
+from ._vendor.pystiebeleltron.wpm3i import Wpm3iStiebelEltronAPI
 
 from .coordinator import (
     StiebelEltronConfigEntry,

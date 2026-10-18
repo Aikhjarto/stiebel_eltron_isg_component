@@ -11,7 +11,7 @@ from homeassistant.components.binary_sensor.const import BinarySensorDeviceClass
 from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from pystiebeleltron import ControllerModel
+from ._vendor.pystiebeleltron import ControllerModel
 
 from .const import (
     BUFFER_1_CHARGING_PUMP,

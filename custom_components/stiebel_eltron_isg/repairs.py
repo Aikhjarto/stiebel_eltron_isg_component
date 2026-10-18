@@ -9,7 +9,7 @@ from homeassistant.components.repairs import (
 )
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er, issue_registry as ir
-from pystiebeleltron import ControllerModel
+from ._vendor.pystiebeleltron import ControllerModel
 
 from .const import DOMAIN
 from .coordinator import StiebelEltronConfigEntry

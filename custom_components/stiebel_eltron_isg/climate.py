@@ -20,7 +20,7 @@ from homeassistant.const import UnitOfTemperature
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from pystiebeleltron import ControllerModel
+from ._vendor.pystiebeleltron import ControllerModel
 
 from .const import DOMAIN
 from .coordinator import AnyStiebelEltronDataCoordinator, StiebelEltronConfigEntry

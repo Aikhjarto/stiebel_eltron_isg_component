@@ -18,7 +18,7 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 from modbus_connection import ModbusError
 from modbus_connection.cli_helper import field_rows
 from modbus_connection.model import Component, ManualComponent
-from pystiebeleltron import ControllerModel, StiebelEltronModbusError
+from ._vendor.pystiebeleltron import ControllerModel, StiebelEltronModbusError
 
 from custom_components.stiebel_eltron_isg.const import (
     ATTR_MANUFACTURER,

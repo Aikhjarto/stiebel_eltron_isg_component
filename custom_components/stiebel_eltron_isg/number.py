@@ -14,7 +14,7 @@ from homeassistant.const import EntityCategory, UnitOfTemperature
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from pystiebeleltron import ControllerModel
+from ._vendor.pystiebeleltron import ControllerModel
 
 from .const import (
     AREA_COOLING_FLOW_TEMPERATURE_HYSTERESIS,

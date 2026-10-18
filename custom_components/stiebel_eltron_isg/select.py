@@ -7,7 +7,7 @@ from typing import Any
 from homeassistant.components.select import SelectEntity, SelectEntityDescription
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from pystiebeleltron import ControllerModel
+from ._vendor.pystiebeleltron import ControllerModel
 
 from .const import OPERATION_MODE
 from .coordinator import AnyStiebelEltronDataCoordinator, StiebelEltronConfigEntry

@@ -19,7 +19,7 @@ from homeassistant.helpers.selector import (
 from homeassistant.helpers.service_info.dhcp import DhcpServiceInfo
 from modbus_connection import ModbusError, ModbusTcpParams
 import probatio
-from pystiebeleltron import (
+from ._vendor.pystiebeleltron import (
     StiebelEltronModbusError,
     UnknownControllerModelError,
     get_controller_model,

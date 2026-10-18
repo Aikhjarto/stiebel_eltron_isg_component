@@ -17,7 +17,7 @@ from homeassistant.exceptions import (
 from homeassistant.helpers import config_validation as cv, issue_registry as ir
 from homeassistant.helpers.typing import ConfigType
 from modbus_connection import ModbusTcpParams
-from pystiebeleltron import (
+from ._vendor.pystiebeleltron import (
     ControllerModel,
     StiebelEltronModbusError,
     UnknownControllerModelError,
