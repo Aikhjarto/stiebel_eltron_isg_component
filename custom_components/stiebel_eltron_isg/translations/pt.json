@@ -63,6 +63,9 @@
         },
         "write_failed": {
             "message": "The setting {field} could not be written because communication with the heat pump failed."
+        },
+        "sg_ready_maximum_operation": {
+            "message": "A temperatura alvo não pode ser alterada durante o funcionamento máximo SG Ready (estado 4): a bomba de calor usa então a temperatura ambiente máxima, limitada apenas pela temperatura máxima do circuito de aquecimento."
         }
     },
     "issues": {

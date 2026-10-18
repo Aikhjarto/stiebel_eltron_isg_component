@@ -63,6 +63,9 @@
         },
         "write_failed": {
             "message": "The setting {field} could not be written because communication with the heat pump failed."
+        },
+        "sg_ready_maximum_operation": {
+            "message": "Požadovanú teplotu nemožno zmeniť, kým je aktívna maximálna prevádzka SG Ready (stav 4): tepelné čerpadlo vtedy používa maximálnu teplotu miestnosti, obmedzenú iba maximálnou teplotou vykurovacieho okruhu."
         }
     },
     "issues": {

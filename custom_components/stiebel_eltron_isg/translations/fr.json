@@ -63,6 +63,9 @@
         },
         "write_failed": {
             "message": "The setting {field} could not be written because communication with the heat pump failed."
+        },
+        "sg_ready_maximum_operation": {
+            "message": "La température de consigne ne peut pas être modifiée pendant le fonctionnement maximal SG Ready (état 4) : la pompe à chaleur utilise alors sa température ambiante maximale, limitée uniquement par la température maximale du circuit de chauffage."
         }
     },
     "issues": {

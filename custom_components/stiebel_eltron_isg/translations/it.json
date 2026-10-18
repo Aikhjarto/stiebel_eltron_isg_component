@@ -63,6 +63,9 @@
         },
         "write_failed": {
             "message": "The setting {field} could not be written because communication with the heat pump failed."
+        },
+        "sg_ready_maximum_operation": {
+            "message": "La temperatura target non può essere modificata durante il funzionamento massimo SG Ready (stato 4): la pompa di calore usa allora la temperatura ambiente massima, limitata solo dalla temperatura massima del circuito di riscaldamento."
         }
     },
     "issues": {
