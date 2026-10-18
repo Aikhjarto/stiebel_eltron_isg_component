@@ -18,9 +18,11 @@ from homeassistant.components.climate.const import (
 )
 from homeassistant.const import UnitOfTemperature
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from pystiebeleltron import ControllerModel
 
+from .const import DOMAIN
 from .coordinator import AnyStiebelEltronDataCoordinator, StiebelEltronConfigEntry
 from .entity import OptimisticValueMixin, StiebelEltronISGEntity
 
@@ -35,9 +37,13 @@ CLIMATE_HK_3 = "climate_hk_3"
 ECO_MODE = 4
 MANUAL_MODE = 14
 
-# SG Ready operating states in which the controller heats the circuits to their
-# load temperatures (start-up recommendation and forced start-up).
-SG_READY_LOAD_UP_STATES = (3, 4)
+# SG Ready start-up recommendation: the controller heats the circuits to their SG
+# Ready load temperatures instead of the comfort or eco temperature.
+SG_READY_START_RECOMMENDATION = 3
+# SG Ready maximum operation: the controller ignores the load temperatures and sets
+# the room targets to their maximum; only the maximum flow temperature of a
+# circuit limits it.
+SG_READY_MAXIMUM_OPERATION = 4
 # Value of the SG Ready buffer setting for a system without a buffer cylinder.
 SG_READY_NO_BUFFER = 1
 SG_READY_WRITE_COMPONENT = "extended_energy_management_settings"
@@ -150,6 +156,9 @@ class StiebelEltronClimateEntityDescription(ClimateEntityDescription):
     # The load temperature of HC 1 is the buffer temperature when a buffer
     # cylinder is configured, so it is a room target only without one.
     sg_ready_load_temp_requires_no_buffer: bool = False
+    # The room target the controller reports for the circuit, shown in SG Ready
+    # maximum operation (state 4), where it is not one of the settable values.
+    sg_ready_room_target_register: Any = None
 
     def __post_init__(self) -> None:
         """Convert legacy register tokens into API value accessor lambdas."""
@@ -172,6 +181,11 @@ class StiebelEltronClimateEntityDescription(ClimateEntityDescription):
 
         if not all(callable(ref) for ref, _ in self.sg_ready_load_temp_registers):
             raise TypeError("sg_ready_load_temp_registers must use lambda expressions")
+
+        if self.sg_ready_room_target_register is not None and not callable(
+            self.sg_ready_room_target_register
+        ):
+            raise TypeError("sg_ready_room_target_register must be a lambda expression")
 
 
 WPM_3I_CLIMATE_TYPES = [
@@ -247,6 +261,9 @@ WPM_CLIMATE_TYPES = [
             ),
         ),
         sg_ready_load_temp_requires_no_buffer=True,
+        sg_ready_room_target_register=lambda api: (
+            api.system_values.room_temperatures[0].set_temperature
+        ),
     ),
     StiebelEltronClimateEntityDescription(
         key=CLIMATE_HK_2,
@@ -279,6 +296,9 @@ WPM_CLIMATE_TYPES = [
                 "load_temperature_hc2",
             ),
         ),
+        sg_ready_room_target_register=lambda api: (
+            api.system_values.room_temperatures[1].set_temperature
+        ),
     ),
     StiebelEltronClimateEntityDescription(
         key=CLIMATE_HK_3,
@@ -304,6 +324,9 @@ WPM_CLIMATE_TYPES = [
                 ),
                 "load_temperature_hc3",
             ),
+        ),
+        sg_ready_room_target_register=lambda api: (
+            api.system_values.room_temperatures[2].set_temperature
         ),
     ),
 ]
@@ -399,6 +422,7 @@ class StiebelEltronISGClimateEntity(
     _optimistic_target_field: str | None = None
     sg_ready_load_temp_registers: tuple[tuple[Any, str], ...] = ()
     sg_ready_load_temp_requires_no_buffer = False
+    sg_ready_room_target_register: Any = None
     _attr_supported_features = (
         ClimateEntityFeature.TARGET_TEMPERATURE
         | ClimateEntityFeature.PRESET_MODE
@@ -436,6 +460,7 @@ class StiebelEltronISGClimateEntity(
         self.sg_ready_load_temp_requires_no_buffer = (
             description.sg_ready_load_temp_requires_no_buffer
         )
+        self.sg_ready_room_target_register = description.sg_ready_room_target_register
 
     @property
     def available(self) -> bool:
@@ -478,18 +503,14 @@ class StiebelEltronISGClimateEntity(
         return None
 
     @property
-    def _sg_ready_load_temp(self) -> tuple[Any, str] | None:
-        """Return accessor and field of the SG Ready load temperature in force.
-
-        In SG Ready states 3 and 4 the controller heats the circuit to its load
-        temperature instead of the comfort or eco target of the operating mode.
-        """
+    def _sg_ready_state(self) -> int | None:
+        """Return the SG Ready state if it changes the target of this circuit."""
         if not self.sg_ready_load_temp_registers:
             return None
         state = self._read_register(
             lambda api: api.energy_system_information.sg_ready_operating_state
         )
-        if state not in SG_READY_LOAD_UP_STATES:
+        if state not in (SG_READY_START_RECOMMENDATION, SG_READY_MAXIMUM_OPERATION):
             return None
         if self.sg_ready_load_temp_requires_no_buffer and (
             self._read_register(
@@ -497,6 +518,22 @@ class StiebelEltronISGClimateEntity(
             )
             != SG_READY_NO_BUFFER
         ):
+            return None
+        return int(state)
+
+    @property
+    def _sg_ready_maximum_operation(self) -> bool:
+        """Return True while SG Ready maximum operation sets this circuit's target."""
+        return self._sg_ready_state == SG_READY_MAXIMUM_OPERATION
+
+    @property
+    def _sg_ready_load_temp(self) -> tuple[Any, str] | None:
+        """Return accessor and field of the SG Ready load temperature in force.
+
+        In SG Ready state 3 the controller heats the circuit to its load
+        temperature instead of the comfort or eco target of the operating mode.
+        """
+        if self._sg_ready_state != SG_READY_START_RECOMMENDATION:
             return None
         for accessor, field in self.sg_ready_load_temp_registers:
             if self._read_accessor(accessor) is not None:
@@ -515,6 +552,14 @@ class StiebelEltronISGClimateEntity(
     @property
     def target_temperature(self) -> float | None:
         """Return the temperature we try to reach."""
+        if self._sg_ready_maximum_operation:
+            # The controller sets the room target to its maximum; show what it
+            # reports, or that maximum when the circuit has no room target value.
+            if self.sg_ready_room_target_register is not None:
+                reported = self._read_accessor(self.sg_ready_room_target_register)
+                if reported is not None:
+                    return reported
+            return self.max_temp
         sg_ready = self._sg_ready_load_temp
         field = self._target_temp_write_field
         # An assumed target only holds for the field it was written to. Once the
@@ -535,8 +580,14 @@ class StiebelEltronISGClimateEntity(
         """Set new target temperature.
 
         While SG Ready heats to the load temperature, that load temperature is the
-        target shown, so it is also the one changed.
+        target shown, so it is also the one changed. In SG Ready maximum operation
+        no settable value is the target, so a change is refused.
         """
+        if self._sg_ready_maximum_operation:
+            raise ServiceValidationError(
+                translation_domain=DOMAIN,
+                translation_key="sg_ready_maximum_operation",
+            )
         value = kwargs["temperature"]
         field = self._target_temp_write_field
         if field is None:

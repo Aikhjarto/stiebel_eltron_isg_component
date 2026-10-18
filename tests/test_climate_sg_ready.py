@@ -1,9 +1,10 @@
-"""Climate targets follow the SG Ready load temperatures in states 3 and 4."""
+"""Climate targets follow SG Ready: load temperatures in state 3, the reported target in state 4."""
 
 from types import SimpleNamespace
 from unittest.mock import patch
 
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import entity_registry as er
 from modbus_connection.mock import MockModbusConnection, WriteEvent
 from pystiebeleltron import UNAVAILABLE, ControllerModel
@@ -34,6 +35,8 @@ LOAD_TEMPERATURE_HC2 = 4254
 LOAD_TEMPERATURE_HC1_2 = 4271
 LOAD_TEMPERATURE_HC2_2 = 4272
 LOAD_TEMPERATURE_HC3 = 4273
+# Room targets the controller reports, input registers (0-based like the library)
+ROOM_TARGET = {CLIMATE_HK_1: 584, CLIMATE_HK_2: 588, CLIMATE_HK_3: 592}
 
 
 async def _setup_wpmsystem(hass, mock_config_entry, mock_get_controller_model, unit):
@@ -99,7 +102,7 @@ async def test_wpmsystem_targets_follow_sg_ready_state(
     mock_get_controller_model,
     mock_modbus_connection,
 ) -> None:
-    """States 3 and 4 show the load temperatures, other states the program target."""
+    """State 3 shows the load temperatures, state 4 the reported room targets."""
     unit = mock_modbus_connection.for_unit(UNIT_ID)
     entity_ids = await _setup_wpmsystem(
         hass, mock_config_entry, mock_get_controller_model, unit
@@ -108,15 +111,29 @@ async def test_wpmsystem_targets_follow_sg_ready_state(
 
     assert _targets(hass, entity_ids) == [24.0, 16.0, 17.0]
 
-    for state in (3, 4):
-        unit.input[SG_READY_STATE] = state
-        await coordinator.async_refresh()
-        # With a buffer cylinder the HC 1 load temperature is the buffer's, so
-        # the HC 1 room target stays the program target.
-        assert _targets(hass, entity_ids) == [24.0, 23.5, 22.5]
+    unit.input[SG_READY_STATE] = 3
+    await coordinator.async_refresh()
+    # With a buffer cylinder the HC 1 load temperature is the buffer's, so the
+    # HC 1 room target stays the program target.
+    assert _targets(hass, entity_ids) == [24.0, 23.5, 22.5]
+
+    # State 4 ignores the load temperatures; the controller reports the room
+    # target it uses (its maximum), and HC 2 without one falls back to 30.
+    unit.input[SG_READY_STATE] = 4
+    unit.input[ROOM_TARGET[CLIMATE_HK_2]] = UNAVAILABLE
+    unit.input[ROOM_TARGET[CLIMATE_HK_3]] = 300
+    await coordinator.async_refresh()
+    assert _targets(hass, entity_ids) == [24.0, 30.0, 30.0]
+    unit.input[ROOM_TARGET[CLIMATE_HK_3]] = 285
+    await coordinator.async_refresh()
+    assert _targets(hass, entity_ids) == [24.0, 30.0, 28.5]
 
     unit.holding[HEATING_BUFFER] = 1  # no buffer
     unit.holding[LOAD_TEMPERATURE_HC1_2] = 230
+    unit.input[ROOM_TARGET[CLIMATE_HK_1]] = 300
+    await coordinator.async_refresh()
+    assert _targets(hass, entity_ids) == [30.0, 30.0, 28.5]
+    unit.input[SG_READY_STATE] = 3
     await coordinator.async_refresh()
     assert _targets(hass, entity_ids) == [23.0, 23.5, 22.5]
 
@@ -159,6 +176,13 @@ async def test_wpmsystem_writes_the_load_temperature_in_force(
     assert hass.states.get(entity_ids[CLIMATE_HK_2]).attributes["temperature"] == 23.5
     await set_hk2(22.0)
 
+    # In state 4 no settable value is the target, so a change is refused.
+    unit.input[SG_READY_STATE] = 4
+    await coordinator.async_refresh()
+    with pytest.raises(ServiceValidationError) as err:
+        await set_hk2(21.0)
+    assert err.value.translation_key == "sg_ready_maximum_operation"
+
     unit.input[SG_READY_STATE] = 2
     await coordinator.async_refresh()
     assert hass.states.get(entity_ids[CLIMATE_HK_2]).attributes["temperature"] == 16.0
@@ -195,6 +219,9 @@ async def test_assumed_target_does_not_survive_an_sg_ready_change() -> None:
         extended_energy_management_settings=SimpleNamespace(
             load_temperature_hc2_2=23.5, load_temperature_hc2=23.5, heating_buffer=2
         ),
+        system_values=SimpleNamespace(
+            room_temperatures=[SimpleNamespace(set_temperature=None)] * 5
+        ),
     )
     entity = StiebelEltronWPMClimateEntity(
         SimpleNamespace(device_info={}),
@@ -217,6 +244,10 @@ async def test_assumed_target_does_not_survive_an_sg_ready_change() -> None:
     ]
     assert entity.target_temperature == 22.0
 
+    # The assumed load temperature is not the state 4 target either.
+    api.energy_system_information.sg_ready_operating_state = 4
+    assert entity.target_temperature == 30.0
+
 
 def test_only_wpm_family_follows_sg_ready() -> None:
     """WPM 3i and LWZ have no load temperatures to follow."""
@@ -227,8 +258,12 @@ def test_only_wpm_family_follows_sg_ready() -> None:
         description.sg_ready_load_temp_requires_no_buffer
         for description in WPM_CLIMATE_TYPES
     ] == [True, False, False]
+    assert all(
+        description.sg_ready_room_target_register for description in WPM_CLIMATE_TYPES
+    )
     assert not any(
         description.sg_ready_load_temp_registers
+        or description.sg_ready_room_target_register
         for description in (*WPM_3I_CLIMATE_TYPES, *LWZ_CLIMATE_TYPES)
     )
 
@@ -250,6 +285,17 @@ def test_description_rejects_non_callable_load_temperature_register() -> None:
             max_temp=30,
             sg_ready_load_temp_registers=(("legacy", "field"),),
         )
+    with pytest.raises(TypeError, match="sg_ready_room_target_register"):
+        StiebelEltronClimateEntityDescription(
+            key="invalid",
+            humidity_modbus_register=[valid],
+            actual_temperature_register=[valid],
+            eco_target_temp_register=valid,
+            comfort_target_temp_register=valid,
+            min_temp=5,
+            max_temp=30,
+            sg_ready_room_target_register="legacy",
+        )
 
 
 def test_load_temperature_references_resolve_against_the_wpm_api() -> None:
@@ -262,3 +308,4 @@ def test_load_temperature_references_resolve_against_the_wpm_api() -> None:
         for accessor, field in description.sg_ready_load_temp_registers:
             accessor(api)
             assert hasattr(component, field), field
+        description.sg_ready_room_target_register(api)

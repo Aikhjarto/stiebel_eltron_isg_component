@@ -68,6 +68,9 @@
         },
         "write_failed": {
             "message": "Die Einstellung {field} konnte wegen eines Kommunikationsfehlers mit der Wärmepumpe nicht geschrieben werden."
+        },
+        "sg_ready_maximum_operation": {
+            "message": "Die Solltemperatur kann im SG-Ready-Maximalbetrieb (Zustand 4) nicht geändert werden: Die Wärmepumpe verwendet dann ihre maximale Raumtemperatur, begrenzt nur durch die Maximaltemperatur des Heizkreises."
         }
     },
     "issues": {

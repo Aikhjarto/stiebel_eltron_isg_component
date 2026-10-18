@@ -68,6 +68,9 @@
         },
         "write_failed": {
             "message": "The setting {field} could not be written because communication with the heat pump failed."
+        },
+        "sg_ready_maximum_operation": {
+            "message": "The target temperature cannot be changed while SG Ready maximum operation (state 4) is active: the heat pump then uses its maximum room temperature, limited only by the maximum flow temperature of the heating circuit."
         }
     },
     "issues": {
