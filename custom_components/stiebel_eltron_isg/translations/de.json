@@ -791,6 +791,27 @@
             },
             "heating_curve_low_end_hk2": {
                 "name": "Heizkurve Fußpunkt HK 2"
+            },
+            "sg_ready_load_temperature_hk1": {
+                "name": "SG Ready Lasttemperatur HK 1 / Puffer"
+            },
+            "sg_ready_load_temperature_hk2": {
+                "name": "SG Ready Lasttemperatur HK 2"
+            },
+            "sg_ready_load_temperature_hk3": {
+                "name": "SG Ready Lasttemperatur HK 3"
+            },
+            "sg_ready_load_temperature_hk4": {
+                "name": "SG Ready Lasttemperatur HK 4"
+            },
+            "sg_ready_load_temperature_hk5": {
+                "name": "SG Ready Lasttemperatur HK 5"
+            },
+            "sg_ready_load_temperature_buffer": {
+                "name": "SG Ready Lasttemperatur Puffer"
+            },
+            "sg_ready_load_temperature_water": {
+                "name": "SG Ready Lasttemperatur Warmwasser"
             }
         },
         "switch": {

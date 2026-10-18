@@ -56,7 +56,22 @@ _CLIMATE_WRITE_FIELDS = (
 )
 
 _UNVALIDATED_WRITE_FIELDS = frozenset({
-    (WpmStiebelEltronAPI, "system_parameters", "heating_curve_rise_hk_3")
+    (WpmStiebelEltronAPI, "system_parameters", "heating_curve_rise_hk_3"),
+    # SG Ready load temperatures: the library accepts any value, the number
+    # entities offer the ranges of the ISG (20-30 degC for HK 2-5, 20-50 degC for
+    # HK 1 / buffer and the buffer, 40-65 degC for hot water).
+    *(
+        (WpmStiebelEltronAPI, "extended_energy_management_settings", field)
+        for field in (
+            "load_temperature_hc1_2",
+            "load_temperature_hc2_2",
+            "load_temperature_hc3",
+            "load_temperature_hc4",
+            "load_temperature_hc5",
+            "load_temperature_buffer",
+            "load_temperature_dhw_2",
+        )
+    ),
 })
 
 

@@ -791,6 +791,27 @@
             },
             "heating_curve_low_end_hk2": {
                 "name": "Heating Curve Low End HK2"
+            },
+            "sg_ready_load_temperature_hk1": {
+                "name": "SG Ready Load Temperature HK1 / Buffer"
+            },
+            "sg_ready_load_temperature_hk2": {
+                "name": "SG Ready Load Temperature HK2"
+            },
+            "sg_ready_load_temperature_hk3": {
+                "name": "SG Ready Load Temperature HK3"
+            },
+            "sg_ready_load_temperature_hk4": {
+                "name": "SG Ready Load Temperature HK4"
+            },
+            "sg_ready_load_temperature_hk5": {
+                "name": "SG Ready Load Temperature HK5"
+            },
+            "sg_ready_load_temperature_buffer": {
+                "name": "SG Ready Load Temperature Buffer"
+            },
+            "sg_ready_load_temperature_water": {
+                "name": "SG Ready Load Temperature Water"
             }
         },
         "switch": {

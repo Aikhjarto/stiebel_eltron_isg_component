@@ -138,6 +138,12 @@ WPMsystem also offers runtime counters: **Compressor Heating Heat Pump 1**,
 two count heat pump 1 only. A hot water runtime is not offered yet because it
 has not been verified on hardware.
 
+## SG Ready load temperatures
+
+In SG Ready states 3 (start-up recommendation) and 4 (forced start-up) a WPM heats each circuit, the buffer and the hot water to their SG Ready load temperatures.
+On WPM, WPMsystem and LWZ R290 these are number entities named "SG Ready Load Temperature" (HK1 / buffer, HK2 to HK5, buffer and water), with the ranges the ISG offers. HK4 and HK5 are disabled by default like the other entities of circuits 4 and 5.
+With a buffer cylinder, "HK1 / buffer" is the buffer temperature.
+
 ## Automation example
 
 Use the [heat pump fault notification blueprint](blueprints/automation/heat_pump_fault.yaml)

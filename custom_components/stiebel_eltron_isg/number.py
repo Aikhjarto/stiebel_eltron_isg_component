@@ -50,6 +50,13 @@ from .const import (
     MANUAL_HC_SET_HK1,
     MANUAL_HC_SET_HK2,
     MANUAL_WATER_TEMPERATURE_TARGET,
+    SG_READY_LOAD_TEMPERATURE_BUFFER,
+    SG_READY_LOAD_TEMPERATURE_HK1,
+    SG_READY_LOAD_TEMPERATURE_HK2,
+    SG_READY_LOAD_TEMPERATURE_HK3,
+    SG_READY_LOAD_TEMPERATURE_HK4,
+    SG_READY_LOAD_TEMPERATURE_HK5,
+    SG_READY_LOAD_TEMPERATURE_WATER,
 )
 from .coordinator import AnyStiebelEltronDataCoordinator, StiebelEltronConfigEntry
 from .entity import OptimisticValueMixin, StiebelEltronISGEntity
@@ -256,6 +263,107 @@ NUMBER_TYPES_WPM_3I = [
     ),
 ]
 
+# SG Ready load temperatures: the targets SG Ready states 3 and 4 heat to, with
+# the ranges the ISG offers. HK 4 and HK 5 need the extension module and are
+# disabled by default like their other entities. "HK1 / buffer" is the buffer
+# temperature when a buffer cylinder is configured.
+SG_READY_LOAD_TEMPERATURE_NUMBER_TYPES = [
+    StiebelEltronNumberEntityDescription(
+        key=SG_READY_LOAD_TEMPERATURE_HK1,
+        translation_key=SG_READY_LOAD_TEMPERATURE_HK1,
+        native_unit_of_measurement=UnitOfTemperature.CELSIUS,
+        native_min_value=20,
+        native_max_value=50,
+        native_step=0.1,
+        modbus_register=lambda api: (
+            api.extended_energy_management_settings.load_temperature_hc1_2
+        ),
+        write_component="extended_energy_management_settings",
+        write_field="load_temperature_hc1_2",
+    ),
+    StiebelEltronNumberEntityDescription(
+        key=SG_READY_LOAD_TEMPERATURE_HK2,
+        translation_key=SG_READY_LOAD_TEMPERATURE_HK2,
+        native_unit_of_measurement=UnitOfTemperature.CELSIUS,
+        native_min_value=20,
+        native_max_value=30,
+        native_step=0.1,
+        modbus_register=lambda api: (
+            api.extended_energy_management_settings.load_temperature_hc2_2
+        ),
+        write_component="extended_energy_management_settings",
+        write_field="load_temperature_hc2_2",
+    ),
+    StiebelEltronNumberEntityDescription(
+        key=SG_READY_LOAD_TEMPERATURE_HK3,
+        translation_key=SG_READY_LOAD_TEMPERATURE_HK3,
+        native_unit_of_measurement=UnitOfTemperature.CELSIUS,
+        native_min_value=20,
+        native_max_value=30,
+        native_step=0.1,
+        modbus_register=lambda api: (
+            api.extended_energy_management_settings.load_temperature_hc3
+        ),
+        write_component="extended_energy_management_settings",
+        write_field="load_temperature_hc3",
+    ),
+    StiebelEltronNumberEntityDescription(
+        key=SG_READY_LOAD_TEMPERATURE_HK4,
+        translation_key=SG_READY_LOAD_TEMPERATURE_HK4,
+        native_unit_of_measurement=UnitOfTemperature.CELSIUS,
+        native_min_value=20,
+        native_max_value=30,
+        native_step=0.1,
+        entity_registry_enabled_default=False,
+        modbus_register=lambda api: (
+            api.extended_energy_management_settings.load_temperature_hc4
+        ),
+        write_component="extended_energy_management_settings",
+        write_field="load_temperature_hc4",
+    ),
+    StiebelEltronNumberEntityDescription(
+        key=SG_READY_LOAD_TEMPERATURE_HK5,
+        translation_key=SG_READY_LOAD_TEMPERATURE_HK5,
+        native_unit_of_measurement=UnitOfTemperature.CELSIUS,
+        native_min_value=20,
+        native_max_value=30,
+        native_step=0.1,
+        entity_registry_enabled_default=False,
+        modbus_register=lambda api: (
+            api.extended_energy_management_settings.load_temperature_hc5
+        ),
+        write_component="extended_energy_management_settings",
+        write_field="load_temperature_hc5",
+    ),
+    StiebelEltronNumberEntityDescription(
+        key=SG_READY_LOAD_TEMPERATURE_BUFFER,
+        translation_key=SG_READY_LOAD_TEMPERATURE_BUFFER,
+        native_unit_of_measurement=UnitOfTemperature.CELSIUS,
+        native_min_value=20,
+        native_max_value=50,
+        native_step=0.1,
+        modbus_register=lambda api: (
+            api.extended_energy_management_settings.load_temperature_buffer
+        ),
+        write_component="extended_energy_management_settings",
+        write_field="load_temperature_buffer",
+    ),
+    StiebelEltronNumberEntityDescription(
+        key=SG_READY_LOAD_TEMPERATURE_WATER,
+        translation_key=SG_READY_LOAD_TEMPERATURE_WATER,
+        native_unit_of_measurement=UnitOfTemperature.CELSIUS,
+        native_min_value=40,
+        native_max_value=65,
+        native_step=0.1,
+        modbus_register=lambda api: (
+            api.extended_energy_management_settings.load_temperature_dhw_2
+        ),
+        write_component="extended_energy_management_settings",
+        write_field="load_temperature_dhw_2",
+    ),
+]
+
+
 NUMBER_TYPES_WPM = [
     *NUMBER_TYPES_WPM_3I,
     StiebelEltronNumberEntityDescription(
@@ -287,6 +395,7 @@ NUMBER_TYPES_WPM = [
         modbus_register=lambda api: api.system_parameters.heating_curve_rise_hk_3,
         write_field="heating_curve_rise_hk_3",
     ),
+    *SG_READY_LOAD_TEMPERATURE_NUMBER_TYPES,
 ]
 
 NUMBER_TYPES_LWZ = [

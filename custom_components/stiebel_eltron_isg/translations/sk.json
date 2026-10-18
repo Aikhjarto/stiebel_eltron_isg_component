@@ -786,6 +786,27 @@
             },
             "heating_curve_low_end_hk2": {
                 "name": "Dolný bod vykurovacej krivky TO 2"
+            },
+            "sg_ready_load_temperature_hk1": {
+                "name": "SG Ready teplota nabíjania TO 1 / zásobník"
+            },
+            "sg_ready_load_temperature_hk2": {
+                "name": "SG Ready teplota nabíjania TO 2"
+            },
+            "sg_ready_load_temperature_hk3": {
+                "name": "SG Ready teplota nabíjania TO 3"
+            },
+            "sg_ready_load_temperature_hk4": {
+                "name": "SG Ready teplota nabíjania TO 4"
+            },
+            "sg_ready_load_temperature_hk5": {
+                "name": "SG Ready teplota nabíjania TO 5"
+            },
+            "sg_ready_load_temperature_buffer": {
+                "name": "SG Ready teplota nabíjania zásobník"
+            },
+            "sg_ready_load_temperature_water": {
+                "name": "SG Ready teplota nabíjania TÚV"
             }
         },
         "switch": {

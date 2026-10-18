@@ -278,6 +278,27 @@
             },
             "manual_water_temperature_target": {
                 "default": "mdi:thermometer-lines"
+            },
+            "sg_ready_load_temperature_buffer": {
+                "default": "mdi:thermometer-plus"
+            },
+            "sg_ready_load_temperature_hk1": {
+                "default": "mdi:thermometer-plus"
+            },
+            "sg_ready_load_temperature_hk2": {
+                "default": "mdi:thermometer-plus"
+            },
+            "sg_ready_load_temperature_hk3": {
+                "default": "mdi:thermometer-plus"
+            },
+            "sg_ready_load_temperature_hk4": {
+                "default": "mdi:thermometer-plus"
+            },
+            "sg_ready_load_temperature_hk5": {
+                "default": "mdi:thermometer-plus"
+            },
+            "sg_ready_load_temperature_water": {
+                "default": "mdi:thermometer-plus"
             }
         },
         "sensor": {
