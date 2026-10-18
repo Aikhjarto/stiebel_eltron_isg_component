@@ -48,6 +48,8 @@ from .const import (
     ACTUAL_TEMPERATURE_HK1,
     ACTUAL_TEMPERATURE_HK2,
     ACTUAL_TEMPERATURE_HK3,
+    ACTUAL_TEMPERATURE_HK4,
+    ACTUAL_TEMPERATURE_HK5,
     ACTUAL_TEMPERATURE_WATER,
     COMPRESSOR_COOLING,
     COMPRESSOR_HEATING,
@@ -165,6 +167,8 @@ from .const import (
     TARGET_TEMPERATURE_HK1,
     TARGET_TEMPERATURE_HK2,
     TARGET_TEMPERATURE_HK3,
+    TARGET_TEMPERATURE_HK4,
+    TARGET_TEMPERATURE_HK5,
     TARGET_TEMPERATURE_WATER,
     VENTILATION_AIR_ACTUAL_FAN_SPEED,
     VENTILATION_AIR_TARGET_FLOW_RATE,
@@ -1453,6 +1457,39 @@ WPMSYSTEM_COOLING_SENSOR_TYPES = [
 ]
 
 
+def heating_circuit_4_5_flow(field: str) -> StiebelEltronModbusRegister:
+    """Return an accessor for a flow temperature of heating circuit 4 or 5.
+
+    pystiebeleltron reads input registers 612-615 in their own optional block,
+    because they are not in the Modbus manual. A library release without that
+    block has no such attribute; the sensor then reads no value instead of
+    failing the update. A wrong field name still raises.
+    """
+
+    def read(api: Any) -> int | float | None:
+        block = getattr(api, "heating_circuit_4_5_values", None)
+        return None if block is None else getattr(block, field)
+
+    return read
+
+
+# Flow temperatures of heating circuits 4 and 5 (WPE extension module). Verified
+# on a WPMsystem against the ISG page INFO > SYSTEM > HEATING (ACTUAL TEMPERATURE
+# and SET TEMPERATURE HK 4/5). Like the room sensors of these circuits they are
+# disabled by default, since most installations have no extension module.
+WPMSYSTEM_HEATING_CIRCUIT_4_5_FLOW_SENSOR_TYPES = [
+    optional_heating_circuit(
+        create_temperature_entity_description(key, heating_circuit_4_5_flow(field))
+    )
+    for key, field in (
+        (ACTUAL_TEMPERATURE_HK4, "actual_temperature_hk_4"),
+        (TARGET_TEMPERATURE_HK4, "set_temperature_hk_4"),
+        (ACTUAL_TEMPERATURE_HK5, "actual_temperature_hk_5"),
+        (TARGET_TEMPERATURE_HK5, "set_temperature_hk_5"),
+    )
+]
+
+
 WPM_3I_SENSOR_TYPES = (
     WPM_3I_SYSTEM_VALUES_SENSOR_TYPES
     + ENERGYMANAGEMENT_SENSOR_TYPES
@@ -1558,6 +1595,7 @@ async def async_setup_entry(
                     + WPMSYSTEM_HEATING_EFFICIENCY_SENSOR_TYPES
                     + WPMSYSTEM_COOLING_EFFICIENCY_SENSOR_TYPES
                     + WPMSYSTEM_RUNTIME_SENSOR_TYPES
+                    + WPMSYSTEM_HEATING_CIRCUIT_4_5_FLOW_SENSOR_TYPES
                 )
             )
     else:
