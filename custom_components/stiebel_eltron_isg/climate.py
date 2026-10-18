@@ -35,6 +35,13 @@ CLIMATE_HK_3 = "climate_hk_3"
 ECO_MODE = 4
 MANUAL_MODE = 14
 
+# SG Ready operating states in which the controller heats the circuits to their
+# load temperatures (start-up recommendation and forced start-up).
+SG_READY_LOAD_UP_STATES = (3, 4)
+# Value of the SG Ready buffer setting for a system without a buffer cylinder.
+SG_READY_NO_BUFFER = 1
+SG_READY_WRITE_COMPONENT = "extended_energy_management_settings"
+
 WPM_TO_HA_HVAC = {
     1: HVACMode.AUTO,
     2: HVACMode.AUTO,
@@ -136,6 +143,13 @@ class StiebelEltronClimateEntityDescription(ClimateEntityDescription):
     write_component: str = "system_parameters"
     eco_target_temp_write_field: str | None = None
     comfort_target_temp_write_field: str | None = None
+    # In SG Ready states 3 and 4 the circuit's room target is its SG Ready load
+    # temperature. Pairs of accessor and write field (of
+    # extended_energy_management_settings), the first readable one applies.
+    sg_ready_load_temp_registers: tuple[tuple[Any, str], ...] = ()
+    # The load temperature of HC 1 is the buffer temperature when a buffer
+    # cylinder is configured, so it is a room target only without one.
+    sg_ready_load_temp_requires_no_buffer: bool = False
 
     def __post_init__(self) -> None:
         """Convert legacy register tokens into API value accessor lambdas."""
@@ -155,6 +169,9 @@ class StiebelEltronClimateEntityDescription(ClimateEntityDescription):
 
         if not callable(self.comfort_target_temp_register):
             raise TypeError("comfort_target_temp_register must be a lambda expression")
+
+        if not all(callable(ref) for ref, _ in self.sg_ready_load_temp_registers):
+            raise TypeError("sg_ready_load_temp_registers must use lambda expressions")
 
 
 WPM_3I_CLIMATE_TYPES = [
@@ -215,6 +232,21 @@ WPM_CLIMATE_TYPES = [
         max_temp=30,
         eco_target_temp_write_field="eco_temperature_hk_1",
         comfort_target_temp_write_field="comfort_temperature_hk_1",
+        sg_ready_load_temp_registers=(
+            (
+                lambda api: (
+                    api.extended_energy_management_settings.load_temperature_hc1_2
+                ),
+                "load_temperature_hc1_2",
+            ),
+            (
+                lambda api: (
+                    api.extended_energy_management_settings.load_temperature_hc1
+                ),
+                "load_temperature_hc1",
+            ),
+        ),
+        sg_ready_load_temp_requires_no_buffer=True,
     ),
     StiebelEltronClimateEntityDescription(
         key=CLIMATE_HK_2,
@@ -233,6 +265,20 @@ WPM_CLIMATE_TYPES = [
         max_temp=30,
         eco_target_temp_write_field="eco_temperature_hk_2",
         comfort_target_temp_write_field="comfort_temperature_hk_2",
+        sg_ready_load_temp_registers=(
+            (
+                lambda api: (
+                    api.extended_energy_management_settings.load_temperature_hc2_2
+                ),
+                "load_temperature_hc2_2",
+            ),
+            (
+                lambda api: (
+                    api.extended_energy_management_settings.load_temperature_hc2
+                ),
+                "load_temperature_hc2",
+            ),
+        ),
     ),
     StiebelEltronClimateEntityDescription(
         key=CLIMATE_HK_3,
@@ -251,6 +297,14 @@ WPM_CLIMATE_TYPES = [
         max_temp=30,
         eco_target_temp_write_field="eco_temperature_hk_3",
         comfort_target_temp_write_field="comfort_temperature_hk_3",
+        sg_ready_load_temp_registers=(
+            (
+                lambda api: (
+                    api.extended_energy_management_settings.load_temperature_hc3
+                ),
+                "load_temperature_hc3",
+            ),
+        ),
     ),
 ]
 
@@ -343,6 +397,8 @@ class StiebelEltronISGClimateEntity(
     # The field an assumed target temperature was written to, see
     # ``target_temperature``.
     _optimistic_target_field: str | None = None
+    sg_ready_load_temp_registers: tuple[tuple[Any, str], ...] = ()
+    sg_ready_load_temp_requires_no_buffer = False
     _attr_supported_features = (
         ClimateEntityFeature.TARGET_TEMPERATURE
         | ClimateEntityFeature.PRESET_MODE
@@ -375,6 +431,10 @@ class StiebelEltronISGClimateEntity(
         self.eco_target_temp_write_field = description.eco_target_temp_write_field
         self.comfort_target_temp_write_field = (
             description.comfort_target_temp_write_field
+        )
+        self.sg_ready_load_temp_registers = description.sg_ready_load_temp_registers
+        self.sg_ready_load_temp_requires_no_buffer = (
+            description.sg_ready_load_temp_requires_no_buffer
         )
 
     @property
@@ -418,8 +478,36 @@ class StiebelEltronISGClimateEntity(
         return None
 
     @property
+    def _sg_ready_load_temp(self) -> tuple[Any, str] | None:
+        """Return accessor and field of the SG Ready load temperature in force.
+
+        In SG Ready states 3 and 4 the controller heats the circuit to its load
+        temperature instead of the comfort or eco target of the operating mode.
+        """
+        if not self.sg_ready_load_temp_registers:
+            return None
+        state = self._read_register(
+            lambda api: api.energy_system_information.sg_ready_operating_state
+        )
+        if state not in SG_READY_LOAD_UP_STATES:
+            return None
+        if self.sg_ready_load_temp_requires_no_buffer and (
+            self._read_register(
+                lambda api: api.extended_energy_management_settings.heating_buffer
+            )
+            != SG_READY_NO_BUFFER
+        ):
+            return None
+        for accessor, field in self.sg_ready_load_temp_registers:
+            if self._read_accessor(accessor) is not None:
+                return accessor, field
+        return None
+
+    @property
     def _target_temp_write_field(self) -> str | None:
-        """Return the field the current operating mode takes its target from."""
+        """Return the field the current target temperature is taken from."""
+        if (sg_ready := self._sg_ready_load_temp) is not None:
+            return sg_ready[1]
         if self.operation_mode == ECO_MODE:
             return self.eco_target_temp_write_field
         return self.comfort_target_temp_write_field
@@ -427,20 +515,28 @@ class StiebelEltronISGClimateEntity(
     @property
     def target_temperature(self) -> float | None:
         """Return the temperature we try to reach."""
+        sg_ready = self._sg_ready_load_temp
+        field = self._target_temp_write_field
         # An assumed target only holds for the field it was written to. Once the
-        # operating mode makes the other field the target, it no longer applies,
-        # whoever changed that mode.
+        # operating mode or the SG Ready state makes another field the target, it
+        # no longer applies, whoever changed that mode.
         if (
             self._optimistic_value is not None
-            and self._optimistic_target_field == self._target_temp_write_field
+            and self._optimistic_target_field == field
         ):
             return self._optimistic_value
+        if sg_ready is not None:
+            return self._read_accessor(sg_ready[0])
         if self.operation_mode == ECO_MODE:
             return self._read_accessor(self.eco_target_temp_register)
         return self._read_accessor(self.comfort_target_temp_register)
 
     async def async_set_temperature(self, **kwargs: Any) -> None:
-        """Set new target temperature."""
+        """Set new target temperature.
+
+        While SG Ready heats to the load temperature, that load temperature is the
+        target shown, so it is also the one changed.
+        """
         value = kwargs["temperature"]
         field = self._target_temp_write_field
         if field is None:
@@ -449,7 +545,10 @@ class StiebelEltronISGClimateEntity(
         if current is not None and math.isclose(current, value, abs_tol=1e-9):
             return
 
-        await self._write_field(field, value)
+        component = (
+            SG_READY_WRITE_COMPONENT if self._sg_ready_load_temp is not None else None
+        )
+        await self._write_field(field, value, component)
         self._optimistic_target_field = field
         self._set_optimistic_value(value)
 
@@ -461,10 +560,12 @@ class StiebelEltronISGClimateEntity(
         """Read a register reference."""
         return self.coordinator.get_value(register)
 
-    async def _write_field(self, field: str, value: float | int) -> None:
+    async def _write_field(
+        self, field: str, value: float | int, component: str | None = None
+    ) -> None:
         """Write a component field reference."""
         await self.coordinator.write_component_value(
-            self.write_component,
+            component or self.write_component,
             field,
             value,
         )
