@@ -786,6 +786,27 @@
             },
             "heating_curve_low_end_hk2": {
                 "name": "Punto basso curva climatica CC 2"
+            },
+            "sg_ready_load_temperature_hk1": {
+                "name": "Temperatura di carica SG Ready CC 1 / accumulo"
+            },
+            "sg_ready_load_temperature_hk2": {
+                "name": "Temperatura di carica SG Ready CC 2"
+            },
+            "sg_ready_load_temperature_hk3": {
+                "name": "Temperatura di carica SG Ready CC 3"
+            },
+            "sg_ready_load_temperature_hk4": {
+                "name": "Temperatura di carica SG Ready CC 4"
+            },
+            "sg_ready_load_temperature_hk5": {
+                "name": "Temperatura di carica SG Ready CC 5"
+            },
+            "sg_ready_load_temperature_buffer": {
+                "name": "Temperatura di carica SG Ready accumulo"
+            },
+            "sg_ready_load_temperature_water": {
+                "name": "Temperatura di carica SG Ready acqua calda"
             }
         },
         "switch": {

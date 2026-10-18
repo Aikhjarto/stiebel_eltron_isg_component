@@ -272,6 +272,13 @@ COMFORT_COOLING_TEMPERATURE_TARGET_HK3 = "comfort_cooling_temperature_target_hk3
 ECO_COOLING_TEMPERATURE_TARGET_HK3 = "eco_cooling_temperature_target_hk3"
 
 COMFORT_WATER_TEMPERATURE_TARGET = "comfort_water_temperature_target"
+SG_READY_LOAD_TEMPERATURE_HK1 = "sg_ready_load_temperature_hk1"
+SG_READY_LOAD_TEMPERATURE_HK2 = "sg_ready_load_temperature_hk2"
+SG_READY_LOAD_TEMPERATURE_HK3 = "sg_ready_load_temperature_hk3"
+SG_READY_LOAD_TEMPERATURE_HK4 = "sg_ready_load_temperature_hk4"
+SG_READY_LOAD_TEMPERATURE_HK5 = "sg_ready_load_temperature_hk5"
+SG_READY_LOAD_TEMPERATURE_BUFFER = "sg_ready_load_temperature_buffer"
+SG_READY_LOAD_TEMPERATURE_WATER = "sg_ready_load_temperature_water"
 ECO_WATER_TEMPERATURE_TARGET = "eco_water_temperature_target"
 MANUAL_WATER_TEMPERATURE_TARGET = "manual_water_temperature_target"
 MANUAL_HC_SET_HK1 = "manual_hc_set_hk1"

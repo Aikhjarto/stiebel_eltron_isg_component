@@ -146,6 +146,8 @@ In the other states they show the comfort or eco temperature as before.
 
 Heating circuit 1 is the exception when a buffer cylinder is configured: its load temperature ("HC1 / buffer" in the ISG) is then the buffer temperature, not a room temperature, so its climate entity keeps showing the comfort or eco temperature.
 
+The load temperatures themselves are number entities named "SG Ready Load Temperature" (HK1 / buffer, HK2 to HK5, buffer and water), with the ranges the ISG offers. HK4 and HK5 are disabled by default like the other entities of circuits 4 and 5.
+
 ## Automation example
 
 Use the [heat pump fault notification blueprint](blueprints/automation/heat_pump_fault.yaml)
