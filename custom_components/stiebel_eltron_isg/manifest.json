@@ -23,13 +23,13 @@
     "tmodbus"
   ],
   "requirements": [],
-  "version": "2026.10-beta4",
+  "version": "2026.11-beta1",
   "bundled_library": {
     "name": "pystiebeleltron",
-    "version": "0.9.2",
+    "version": "0.10.1",
     "repository": "Aikhjarto/python-stiebel-eltron",
     "ref": "combined-beta",
-    "commit": "7a51aed844542073561ba6e99f43f0fe858670aa",
+    "commit": "4b34be6843f81917608f7572eeebd2c71d47d814",
     "modbus_connection": ">=4.12.1,<5"
   }
 }

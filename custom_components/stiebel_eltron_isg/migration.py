@@ -110,13 +110,10 @@ def async_remove_unsupported_wpmsystem_runtime_sensors(
         return
 
     registry = er.async_get(hass)
-    # Every model prefix, not only the one detected now: a controller that was
-    # replaced by a WPMsystem left ids carrying the name of the model it was
-    # detected as back then, and nothing will ever provide those entities again.
-    prefixes = _legacy_prefixes(entry, model) + [
-        f"{DOMAIN}_{coordinator_display_name(historical)}_"
-        for historical in ControllerModel
-    ]
+    # _legacy_prefixes covers every model, not only the one detected now: a
+    # controller replaced by a WPMsystem left ids carrying the name of the model
+    # it was detected as back then, and nothing will ever provide those again.
+    prefixes = _legacy_prefixes(entry, model)
     obsolete_unique_ids = {
         unique_id
         for key in _WPMSYSTEM_UNSUPPORTED_RUNTIME_KEYS
@@ -162,12 +159,21 @@ def _legacy_prefixes(
 
     The name the user configured comes first: an installation that has already
     been updated holds registry entries of both schemes, and the older entry is
-    the one dashboards, automations and long term statistics refer to.
+    the one dashboards, automations and long term statistics refer to. The
+    model detected now comes second, followed by every other model. A controller
+    that was replaced, or detected as another model before an update, left ids
+    carrying the display name of that earlier model, and they must be migrated
+    and reported like any other. The order is the priority, see _match_prefix.
     """
-    prefixes = [f"{DOMAIN}_{_legacy_name(entry)}_"]
-    model_prefix = f"{DOMAIN}_{coordinator_display_name(model)}_"
-    if model_prefix not in prefixes:
-        prefixes.append(model_prefix)
+    prefixes: list[str] = []
+    for name in (
+        _legacy_name(entry),
+        coordinator_display_name(model),
+        *(coordinator_display_name(historical) for historical in ControllerModel),
+    ):
+        prefix = f"{DOMAIN}_{name}_"
+        if prefix not in prefixes:
+            prefixes.append(prefix)
     return prefixes
 
 
@@ -310,18 +316,16 @@ def async_migrate_device_identifier(
     )
     if legacy is None or legacy.config_entry_id != entry.entry_id:
         # Nothing to migrate, or the name belongs to a second installation that
-        # happens to be called the same. Before Home Assistant 2026.8 identifiers
-        # are global, so ownership has to be checked rather than assumed.
+        # happens to be called the same.
         return
 
     replacement = _async_get_device_by_identifier(
         registry, (DOMAIN, entry.entry_id), entry.entry_id
     )
     if replacement is not None and replacement.config_entry_id != entry.entry_id:
-        # Nothing here creates a device that another config entry can share, so
-        # this should not happen. If it ever does, leaving both devices alone is
-        # the harmless outcome, while removing one would take somebody else's
-        # device with it.
+        # The lookup is scoped to this config entry, so this should not happen.
+        # If it ever does, leaving both devices alone is the harmless outcome,
+        # while removing one would take somebody else's device with it.
         _LOGGER.warning(
             "The device of this config entry belongs to another config entry, so it is left as it is",
             extra={"config_entry_id": replacement.config_entry_id},
@@ -345,15 +349,8 @@ def _async_get_device_by_identifier(
     identifier: tuple[str, str],
     config_entry_id: str,
 ) -> dr.DeviceEntry | None:
-    """Look up one entry's device across supported Home Assistant versions."""
-    # Remove this compatibility helper once the minimum supported Home Assistant
-    # version provides the config-entry-scoped lookup.
-    if hasattr(registry, "async_get_device_by_identifier"):
-        return registry.async_get_device_by_identifier(identifier, config_entry_id)
-
-    # Home Assistant before 2026.8 only has the global identifier lookup. The
-    # caller still verifies ownership before changing the returned device.
-    return registry.async_get_device(identifiers={identifier})
+    """Look up the device of one config entry by identifier."""
+    return registry.async_get_device_by_identifier(identifier, config_entry_id)
 
 
 @callback

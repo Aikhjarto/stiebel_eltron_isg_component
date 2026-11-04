@@ -66,6 +66,9 @@
         },
         "sg_ready_maximum_operation": {
             "message": "La température de consigne ne peut pas être modifiée pendant le fonctionnement maximal SG Ready (état 4) : la pompe à chaleur utilise alors sa température ambiante maximale, limitée uniquement par la température maximale du circuit de chauffage."
+        },
+        "operating_mode_unknown": {
+            "message": "Ce réglage ne peut pas être modifié tant que le mode de fonctionnement de la pompe à chaleur est inconnu."
         }
     },
     "issues": {
@@ -489,6 +492,9 @@
             "compressor_heating_hp_1": {
                 "name": "Compresseur chauffage pompe à chaleur 1"
             },
+            "compressor_heating_water_hp_1": {
+                "name": "Compresseur eau chaude pompe à chaleur 1"
+            },
             "cooling_runtime_hp_1": {
                 "name": "Durée refroidissement pompe à chaleur 1"
             },
@@ -721,8 +727,20 @@
             "comfort_temperature_target_hk3": {
                 "name": "Consigne jour CC 3"
             },
+            "comfort_temperature_target_hk4": {
+                "name": "Consigne jour CC 4"
+            },
+            "comfort_temperature_target_hk5": {
+                "name": "Consigne jour CC 5"
+            },
             "eco_temperature_target_hk3": {
                 "name": "Consigne nuit CC 3"
+            },
+            "eco_temperature_target_hk4": {
+                "name": "Consigne nuit CC 4"
+            },
+            "eco_temperature_target_hk5": {
+                "name": "Consigne nuit CC 5"
             },
             "dualmode_temperature_hzg": {
                 "name": "Température bivalence chauffage"
@@ -771,6 +789,12 @@
             },
             "heating_curve_rise_hk3": {
                 "name": "Pente courbe de chauffe CC 3"
+            },
+            "heating_curve_rise_hk4": {
+                "name": "Pente courbe de chauffe CC 4"
+            },
+            "heating_curve_rise_hk5": {
+                "name": "Pente courbe de chauffe CC 5"
             },
             "fan_level_comfort": {
                 "name": "Niveau ventilateur jour"
@@ -822,6 +846,30 @@
             },
             "sg_ready_load_temperature_water": {
                 "name": "Température de charge SG Ready eau chaude"
+            },
+            "comfort_temperature_target_hk1_thz": {
+                "name": "Consigne jour CC 1"
+            },
+            "eco_temperature_target_hk1_thz": {
+                "name": "Consigne nuit CC 1"
+            },
+            "comfort_temperature_target_hk2_thz": {
+                "name": "Consigne jour CC 2"
+            },
+            "eco_temperature_target_hk2_thz": {
+                "name": "Consigne nuit CC 2"
+            },
+            "comfort_temperature_target_hk3_thz": {
+                "name": "Consigne jour CC 3"
+            },
+            "eco_temperature_target_hk3_thz": {
+                "name": "Consigne nuit CC 3"
+            },
+            "comfort_water_temperature_target_thz": {
+                "name": "Consigne eau chaude jour"
+            },
+            "eco_water_temperature_target_thz": {
+                "name": "Consigne eau chaude nuit"
             }
         },
         "switch": {
@@ -842,6 +890,19 @@
         },
         "select": {
             "operation_mode": {
+                "name": "Mode de fonctionnement",
+                "state": {
+                    "water_heating": "Chauffage de l'eau",
+                    "emergency": "Urgence",
+                    "program": "Programme",
+                    "ready": "Prêt",
+                    "automatic": "Automatique",
+                    "manual": "Manuel",
+                    "comfort": "Confort",
+                    "eco": "Économie"
+                }
+            },
+            "operation_mode_thz": {
                 "name": "Mode de fonctionnement",
                 "state": {
                     "water_heating": "Chauffage de l'eau",
@@ -888,6 +949,36 @@
             },
             "climate_hk_3": {
                 "name": "Circuit chauffage 3",
+                "state_attributes": {
+                    "preset_mode": {
+                        "state": {
+                            "water_heating": "Chauffage de l'eau",
+                            "emergency": "Urgence",
+                            "program": "Programme",
+                            "ready": "Prêt",
+                            "auto": "Automatique",
+                            "manual": "Manuel"
+                        }
+                    }
+                }
+            },
+            "climate_hk_4": {
+                "name": "Circuit chauffage 4",
+                "state_attributes": {
+                    "preset_mode": {
+                        "state": {
+                            "water_heating": "Chauffage de l'eau",
+                            "emergency": "Urgence",
+                            "program": "Programme",
+                            "ready": "Prêt",
+                            "auto": "Automatique",
+                            "manual": "Manuel"
+                        }
+                    }
+                }
+            },
+            "climate_hk_5": {
+                "name": "Circuit chauffage 5",
                 "state_attributes": {
                     "preset_mode": {
                         "state": {

@@ -1,10 +1,7 @@
 """Sensor platform for stiebel_eltron_isg."""
 
-from collections.abc import Callable
 from dataclasses import dataclass, replace
-import logging
 from math import isfinite
-from typing import Any
 
 from homeassistant.components.sensor import (
     SensorDeviceClass,
@@ -55,6 +52,7 @@ from .const import (
     COMPRESSOR_HEATING,
     COMPRESSOR_HEATING_HP_1,
     COMPRESSOR_HEATING_WATER,
+    COMPRESSOR_HEATING_WATER_HP_1,
     COMPRESSOR_SPEED,
     COMPRESSOR_STARTS,
     CONSUMED_COOLING_12M,
@@ -176,32 +174,25 @@ from .const import (
     VOLUME_STREAM_WP1,
     VOLUME_STREAM_WP2,
 )
-from .coordinator import AnyStiebelEltronDataCoordinator, StiebelEltronConfigEntry
-from .entity import StiebelEltronISGEntity
-
-_LOGGER = logging.getLogger(__name__)
+from .coordinator import (
+    ControllerFamily,
+    StiebelEltronConfigEntry,
+    StiebelEltronDataCoordinator,
+)
+from .entity import StiebelEltronISGEntity, ValueAccessor
 
 PARALLEL_UPDATES = 1
-
-type StiebelEltronModbusRegister = Callable[[Any], int | float | None]
 
 
 @dataclass(frozen=True, kw_only=True)
 class StiebelEltronSensorEntityDescription(SensorEntityDescription):
     """Entity description for stiebel eltron with modbus register."""
 
-    modbus_register: StiebelEltronModbusRegister
-
-    def __post_init__(self) -> None:
-        """Ensure value references are lambda-based."""
-        if callable(self.modbus_register):
-            return
-
-        raise TypeError("modbus_register must be a lambda expression")
+    modbus_register: ValueAccessor
 
 
 def create_temperature_entity_description(
-    key: str, modbus_register: StiebelEltronModbusRegister
+    key: str, modbus_register: ValueAccessor
 ) -> StiebelEltronSensorEntityDescription:
     """Create an entry description for a temperature sensor."""
     return StiebelEltronSensorEntityDescription(
@@ -216,7 +207,7 @@ def create_temperature_entity_description(
 
 def create_energy_entity_description(
     key: str,
-    modbus_register: StiebelEltronModbusRegister,
+    modbus_register: ValueAccessor,
     visible_default: bool = True,
 ) -> StiebelEltronSensorEntityDescription:
     """Create an entry description for a energy sensor."""
@@ -233,17 +224,16 @@ def create_energy_entity_description(
 
 def create_power_consumption_entity_description(
     key: str,
-    modbus_register: StiebelEltronModbusRegister,
+    modbus_register: ValueAccessor,
     native_unit: UnitOfEnergy = UnitOfEnergy.KILO_WATT_HOUR,
 ) -> StiebelEltronSensorEntityDescription:
     """Create a sensor for one Servicewelt "POWER CONSUMPTION" window.
 
-    The state class is a placeholder. Whether a window rolls continuously or
-    resets to zero is not established, and the two cases want different classes:
-    a reset-to-zero counter is what ``TOTAL_INCREASING`` is for, while a rolling
-    sum suits neither, since its long-term sum statistic would just drift. Until
-    someone samples a real machine over a day, ``TOTAL`` stays as the least bad
-    option. The presence of a "previous 12 months" register suggests these are
+    Like the heat windows below, these carry no state class. Whether a window
+    rolls continuously or resets is not established, and no state class fits a
+    rolling sum: ``TOTAL`` would record the net change of the window, so the
+    energy that drops out of it counts negative, and ``TOTAL_INCREASING``
+    would read every decrease as a counter reset. The "previous 12 months" register suggests
     bucketed rolling sums rather than daily counters.
 
     The unit is selected per window: the library sums each register pair as
@@ -256,7 +246,7 @@ def create_power_consumption_entity_description(
         key=key,
         translation_key=key,
         native_unit_of_measurement=native_unit,
-        state_class=SensorStateClass.TOTAL,
+        state_class=None,
         device_class=SensorDeviceClass.ENERGY,
         modbus_register=modbus_register,
     )
@@ -264,7 +254,7 @@ def create_power_consumption_entity_description(
 
 def create_heat_window_entity_description(
     key: str,
-    modbus_register: StiebelEltronModbusRegister,
+    modbus_register: ValueAccessor,
     native_unit: UnitOfEnergy = UnitOfEnergy.KILO_WATT_HOUR,
 ) -> StiebelEltronSensorEntityDescription:
     """Create a heat-window sensor without cumulative statistics."""
@@ -280,18 +270,22 @@ def create_heat_window_entity_description(
 
 def create_efficiency_entity_description(
     key: str,
-    modbus_register: StiebelEltronModbusRegister,
+    modbus_register: ValueAccessor,
+    state_class: SensorStateClass | None = None,
 ) -> StiebelEltronSensorEntityDescription:
     """Create a sensor for an efficiency window value.
 
-    These COP-style ratios are intentionally
-    unitless but labeled explicitly as COP for UI clarity.
+    These COP-style ratios are unitless. The ratios this integration computes
+    from two energy windows are ``MEASUREMENT``, so that their course can be
+    kept as long-term statistics; the mean of such a window ratio is not a COP
+    recomputed over the whole period. The raw LWZ efficiency registers stay
+    without a state class until their scaling has been confirmed against a
+    device.
     """
     return StiebelEltronSensorEntityDescription(
         key=key,
         translation_key=key,
-        # TODO: Uncomment the following line once we are sure the values are correct
-        # state_class=SensorStateClass.MEASUREMENT,
+        state_class=state_class,
         modbus_register=modbus_register,
     )
 
@@ -317,7 +311,7 @@ def window_efficiency(
 
 def create_daily_energy_entity_description(
     key: str,
-    modbus_register: StiebelEltronModbusRegister,
+    modbus_register: ValueAccessor,
 ) -> StiebelEltronSensorEntityDescription:
     """Create a sensor for an ISG day register.
 
@@ -339,7 +333,7 @@ def create_daily_energy_entity_description(
 
 
 def create_humidity_entity_description(
-    key: str, modbus_register: StiebelEltronModbusRegister
+    key: str, modbus_register: ValueAccessor
 ) -> StiebelEltronSensorEntityDescription:
     """Create an entry description for a humidity sensor."""
     return StiebelEltronSensorEntityDescription(
@@ -365,7 +359,7 @@ def optional_heating_circuit(
 
 
 def create_pressure_entity_description(
-    key: str, modbus_register: StiebelEltronModbusRegister
+    key: str, modbus_register: ValueAccessor
 ) -> StiebelEltronSensorEntityDescription:
     """Create an entry description for a pressure sensor."""
     return StiebelEltronSensorEntityDescription(
@@ -379,7 +373,7 @@ def create_pressure_entity_description(
 
 
 def create_volume_stream_entity_description(
-    key: str, modbus_register: StiebelEltronModbusRegister
+    key: str, modbus_register: ValueAccessor
 ) -> StiebelEltronSensorEntityDescription:
     """Create an entry description for a volume stream sensor."""
     return StiebelEltronSensorEntityDescription(
@@ -394,7 +388,7 @@ def create_volume_stream_entity_description(
 
 def create_runtime_entity_description(
     key: str,
-    modbus_register: StiebelEltronModbusRegister,
+    modbus_register: ValueAccessor,
     state_class: SensorStateClass = SensorStateClass.MEASUREMENT,
 ) -> StiebelEltronSensorEntityDescription:
     """Create an entry description for an operating-duration sensor."""
@@ -629,22 +623,14 @@ SYSTEM_VALUES_SENSOR_TYPES = [
         TARGET_TEMPERATURE_HK2,
         lambda api: api.system_values.set_temperature_hk_2,
     ),
-    # Library PR #91 moves HK3 into an optional component; support both layouts.
+    # HK3 is an optional component: controllers that reject it stay set up.
     create_temperature_entity_description(
         ACTUAL_TEMPERATURE_HK3,
-        lambda api: (
-            getattr(
-                api, "extended_system_values", api.system_values
-            ).actual_temperature_hk_3
-        ),
+        lambda api: api.extended_system_values.actual_temperature_hk_3,
     ),
     create_temperature_entity_description(
         TARGET_TEMPERATURE_HK3,
-        lambda api: (
-            getattr(
-                api, "extended_system_values", api.system_values
-            ).set_temperature_hk_3
-        ),
+        lambda api: api.extended_system_values.set_temperature_hk_3,
     ),
     create_temperature_entity_description(
         ACTUAL_TEMPERATURE_COOLING_FANCOIL,
@@ -1355,6 +1341,7 @@ WPMSYSTEM_HEATING_EFFICIENCY_SENSOR_TYPES = [
             api.extended_energy_data.amount_of_heat_heating_1_24_h,
             api.extended_energy_data.heating_24h,
         ),
+        SensorStateClass.MEASUREMENT,
     ),
     create_efficiency_entity_description(
         EFFICIENCY_HEATING_1_12_M,
@@ -1362,6 +1349,7 @@ WPMSYSTEM_HEATING_EFFICIENCY_SENSOR_TYPES = [
             api.extended_energy_data.amount_of_heat_heating_1_12,
             api.extended_energy_data.heating_12m,
         ),
+        SensorStateClass.MEASUREMENT,
     ),
     create_efficiency_entity_description(
         EFFICIENCY_HEATING_13_24_M,
@@ -1369,6 +1357,7 @@ WPMSYSTEM_HEATING_EFFICIENCY_SENSOR_TYPES = [
             api.extended_energy_data.amount_of_heat_heating_13_24,
             api.extended_energy_data.heating_13_24,
         ),
+        SensorStateClass.MEASUREMENT,
     ),
 ]
 
@@ -1383,6 +1372,7 @@ WPMSYSTEM_COOLING_EFFICIENCY_SENSOR_TYPES = [
             api.extended_energy_data.amount_of_heat_cooling_1_24_h,
             api.extended_energy_data.cooling_24h,
         ),
+        SensorStateClass.MEASUREMENT,
     ),
     create_efficiency_entity_description(
         EFFICIENCY_COOLING_1_12_M,
@@ -1390,6 +1380,7 @@ WPMSYSTEM_COOLING_EFFICIENCY_SENSOR_TYPES = [
             api.extended_energy_data.amount_of_heat_cooling_1_12_m,
             api.extended_energy_data.cooling_12m,
         ),
+        SensorStateClass.MEASUREMENT,
     ),
     create_efficiency_entity_description(
         EFFICIENCY_COOLING_13_24_M,
@@ -1397,6 +1388,38 @@ WPMSYSTEM_COOLING_EFFICIENCY_SENSOR_TYPES = [
             api.extended_energy_data.amount_of_heat_cooling_13_24,
             api.extended_energy_data.cooling_13_24,
         ),
+        SensorStateClass.MEASUREMENT,
+    ),
+]
+
+# Same window ratio for water heating. Reported on a WPMsystem against the ISG
+# ENERGIEBILANZ page in the same minute: 1205 kWh / 320 kWh = 3.77 for the last
+# 12 months, as displayed. The integration uses the ISG's own efficiency
+# registers for LWZ only, so WPMsystem computes it like heating and cooling.
+WPMSYSTEM_DHW_EFFICIENCY_SENSOR_TYPES = [
+    create_efficiency_entity_description(
+        EFFICIENCY_DHW_1_24_H,
+        lambda api: window_efficiency(
+            api.extended_energy_data.amount_of_heat_dhw_1_24_h__wh_wh,
+            api.extended_energy_data.dhw_24h,
+        ),
+        SensorStateClass.MEASUREMENT,
+    ),
+    create_efficiency_entity_description(
+        EFFICIENCY_DHW_1_12_M,
+        lambda api: window_efficiency(
+            api.extended_energy_data.amount_of_heat_dhw_1_12_m,
+            api.extended_energy_data.dhw_12m,
+        ),
+        SensorStateClass.MEASUREMENT,
+    ),
+    create_efficiency_entity_description(
+        EFFICIENCY_DHW_13_24_M,
+        lambda api: window_efficiency(
+            api.extended_energy_data.amount_of_heat_dhw_13_24_m,
+            api.extended_energy_data.dhw_13_24,
+        ),
+        SensorStateClass.MEASUREMENT,
     ),
 ]
 
@@ -1407,8 +1430,10 @@ WPMSYSTEM_COOLING_EFFICIENCY_SENSOR_TYPES = [
 # the NHZ counters under the reheating stages, without a heat pump; the heat
 # pump 2 block has no NHZ entries. The VD counters therefore get their own
 # keys instead of the hidden aggregate ones, since on a cascade they cover
-# heat pump 1 only. vd_dhw_hp_1 (3644) is left out: the checked installation
-# has a separate DHW heat pump and reads 0x8000 there.
+# heat pump 1 only. vd_dhw_hp_1 (3644) reads 0x8000 on an installation with
+# a separate DHW heat pump; a second WPMsystem, which heats its hot water with
+# heat pump 1, serves it and shows the same hours as VD WARMWASSER on that
+# page. The entity therefore follows the sentinel like the other counters.
 #
 # These are new entities without recorded statistics, so they can use the
 # state class of an ever-growing counter from the start. The older runtime
@@ -1418,6 +1443,10 @@ WPMSYSTEM_RUNTIME_SENSOR_TYPES = [
     create_runtime_entity_description(key, register, SensorStateClass.TOTAL_INCREASING)
     for key, register in (
         (COMPRESSOR_HEATING_HP_1, lambda api: api.extended_energy_data.vd_heating_hp_1),
+        (
+            COMPRESSOR_HEATING_WATER_HP_1,
+            lambda api: api.extended_energy_data.vd_dhw_hp_1,
+        ),
         (COOLING_RUNTIME_HP_1, lambda api: api.energy_data.vd_cooling_x_hp_1),
         (NHZ_1_RUNTIME, lambda api: api.energy_data.nhz_1_reheating),
         (NHZ_2_RUNTIME, lambda api: api.energy_data.nhz_2_reheating),
@@ -1457,7 +1486,7 @@ WPMSYSTEM_COOLING_SENSOR_TYPES = [
 ]
 
 
-def heating_circuit_4_5_flow(field: str) -> StiebelEltronModbusRegister:
+def heating_circuit_4_5_flow(field: str) -> ValueAccessor:
     """Return an accessor for a flow temperature of heating circuit 4 or 5.
 
     pystiebeleltron reads input registers 612-615 in their own optional block,
@@ -1466,7 +1495,7 @@ def heating_circuit_4_5_flow(field: str) -> StiebelEltronModbusRegister:
     failing the update. A wrong field name still raises.
     """
 
-    def read(api: Any) -> int | float | None:
+    def read(api: object) -> int | float | None:
         block = getattr(api, "heating_circuit_4_5_values", None)
         return None if block is None else getattr(block, field)
 
@@ -1527,96 +1556,44 @@ LWZ_SENSOR_TYPES = (
 
 
 async def async_setup_entry(
-    _hass: HomeAssistant,  # Unused function argument: `hass`
+    _hass: HomeAssistant,
     entry: StiebelEltronConfigEntry,
     async_add_devices: AddEntitiesCallback,
 ) -> None:
     """Set up the sensor platform."""
     coordinator = entry.runtime_data
+    model = coordinator.model
 
-    if coordinator.model == ControllerModel.WPM_3i:
-        entities = [
-            StiebelEltronISGSensor(
-                coordinator,
-                entry,
-                description,
-            )
-            for description in WPM_3I_SENSOR_TYPES
-        ]
-        daily_energy_entities = [
-            StiebelEltronISGSensor(
-                coordinator,
-                entry,
-                description,
-            )
-            for description in ENERGY_DAILY_SENSOR_TYPES
-        ]
-        entities.extend(daily_energy_entities)
-    elif coordinator.model in (
-        ControllerModel.WPM_3,
-        ControllerModel.WPMsystem,
-        ControllerModel.LWZ_R290,
-    ):
-        sensor_types = (
+    descriptions: list[StiebelEltronSensorEntityDescription]
+    if coordinator.family is ControllerFamily.WPM_3I:
+        descriptions = WPM_3I_SENSOR_TYPES + ENERGY_DAILY_SENSOR_TYPES
+    elif coordinator.family is ControllerFamily.WPM:
+        descriptions = (
             WPMSYSTEM_SENSOR_TYPES
-            if coordinator.model == ControllerModel.WPMsystem
+            if model is ControllerModel.WPMsystem
             else WPM_SENSOR_TYPES
-        )
-        entities = [
-            StiebelEltronISGSensor(
-                coordinator,
-                entry,
-                description,
-            )
-            for description in sensor_types
-        ]
-        daily_energy_entities = [
-            StiebelEltronISGSensor(
-                coordinator,
-                entry,
-                description,
-            )
-            for description in ENERGY_DAILY_SENSOR_TYPES
-        ]
-        entities.extend(daily_energy_entities)
-        if coordinator.model in (ControllerModel.WPMsystem, ControllerModel.LWZ_R290):
-            entities.extend(
-                StiebelEltronISGSensor(coordinator, entry, description)
-                for description in WPM_AMOUNT_OF_HEAT_SENSOR_TYPES
-            )
-        if coordinator.model == ControllerModel.WPMsystem:
+        ) + ENERGY_DAILY_SENSOR_TYPES
+        if model in (ControllerModel.WPMsystem, ControllerModel.LWZ_R290):
+            descriptions += WPM_AMOUNT_OF_HEAT_SENSOR_TYPES
+        if model is ControllerModel.WPMsystem:
             # These extra fields are limited to WPMsystem; support on the
             # other controller families has not been established.
-            entities.extend(
-                StiebelEltronISGSensor(coordinator, entry, description)
-                for description in (
-                    WPM_INVERTER_POWER_SENSOR_TYPES
-                    + WPMSYSTEM_COOLING_SENSOR_TYPES
-                    + WPMSYSTEM_HEATING_EFFICIENCY_SENSOR_TYPES
-                    + WPMSYSTEM_COOLING_EFFICIENCY_SENSOR_TYPES
-                    + WPMSYSTEM_RUNTIME_SENSOR_TYPES
-                    + WPMSYSTEM_HEATING_CIRCUIT_4_5_FLOW_SENSOR_TYPES
-                )
+            descriptions += (
+                WPM_INVERTER_POWER_SENSOR_TYPES
+                + WPMSYSTEM_COOLING_SENSOR_TYPES
+                + WPMSYSTEM_HEATING_EFFICIENCY_SENSOR_TYPES
+                + WPMSYSTEM_COOLING_EFFICIENCY_SENSOR_TYPES
+                + WPMSYSTEM_DHW_EFFICIENCY_SENSOR_TYPES
+                + WPMSYSTEM_RUNTIME_SENSOR_TYPES
+                + WPMSYSTEM_HEATING_CIRCUIT_4_5_FLOW_SENSOR_TYPES
             )
     else:
-        entities = [
-            StiebelEltronISGSensor(
-                coordinator,
-                entry,
-                description,
-            )
-            for description in LWZ_SENSOR_TYPES
-        ]
-        daily_energy_entities = [
-            StiebelEltronISGSensor(
-                coordinator,
-                entry,
-                description,
-            )
-            for description in LWZ_ENERGY_DAILY_SENSOR_TYPES
-        ]
-        entities.extend(daily_energy_entities)
-    async_add_devices(entities)
+        descriptions = LWZ_SENSOR_TYPES + LWZ_ENERGY_DAILY_SENSOR_TYPES
+
+    async_add_devices([
+        StiebelEltronISGSensor(coordinator, entry, description)
+        for description in descriptions
+    ])
 
 
 class StiebelEltronISGSensor(StiebelEltronISGEntity, SensorEntity):
@@ -1624,7 +1601,7 @@ class StiebelEltronISGSensor(StiebelEltronISGEntity, SensorEntity):
 
     def __init__(
         self,
-        coordinator: AnyStiebelEltronDataCoordinator,
+        coordinator: StiebelEltronDataCoordinator,
         config_entry: StiebelEltronConfigEntry,
         description: StiebelEltronSensorEntityDescription,
     ):

@@ -32,6 +32,7 @@ from custom_components.stiebel_eltron_isg.const import (
     COMPRESSOR_HEATING,
     COMPRESSOR_HEATING_HP_1,
     COMPRESSOR_HEATING_WATER,
+    COMPRESSOR_HEATING_WATER_HP_1,
     COMPRESSOR_SPEED,
     CONSUMED_COOLING_12M,
     CONSUMED_COOLING_LAST_24H,
@@ -89,6 +90,7 @@ from custom_components.stiebel_eltron_isg.const import (
     TARGET_TEMPERATURE_HK1,
     TARGET_TEMPERATURE_HK3,
 )
+from custom_components.stiebel_eltron_isg.coordinator import CONTROLLER_FAMILIES
 from custom_components.stiebel_eltron_isg.entity import build_unique_id
 from custom_components.stiebel_eltron_isg.sensor import (
     ENERGY_DAILY_SENSOR_TYPES,
@@ -100,12 +102,12 @@ from custom_components.stiebel_eltron_isg.sensor import (
     WPM_SENSOR_TYPES,
     WPMSYSTEM_COOLING_EFFICIENCY_SENSOR_TYPES,
     WPMSYSTEM_COOLING_SENSOR_TYPES,
+    WPMSYSTEM_DHW_EFFICIENCY_SENSOR_TYPES,
     WPMSYSTEM_HEATING_CIRCUIT_4_5_FLOW_SENSOR_TYPES,
     WPMSYSTEM_HEATING_EFFICIENCY_SENSOR_TYPES,
     WPMSYSTEM_RUNTIME_SENSOR_TYPES,
     WPMSYSTEM_SENSOR_TYPES,
     StiebelEltronISGSensor,
-    StiebelEltronSensorEntityDescription,
     async_setup_entry,
     window_efficiency,
 )
@@ -246,17 +248,10 @@ def test_runtime_sensors_use_duration_device_class() -> None:
     )
 
 
-def test_sensor_description_rejects_non_callable_register() -> None:
-    """Register references must use the API accessor contract."""
-    with pytest.raises(TypeError, match="must be a lambda expression"):
-        StiebelEltronSensorEntityDescription(
-            key="invalid",
-            modbus_register="legacy register token",
-        )
-
-
 async def _setup_sensor_keys(model: ControllerModel) -> list[str]:
-    entry = SimpleNamespace(runtime_data=SimpleNamespace(model=model))
+    entry = SimpleNamespace(
+        runtime_data=SimpleNamespace(model=model, family=CONTROLLER_FAMILIES[model])
+    )
     add_entities = MagicMock()
     with patch.object(
         sensor_module,
@@ -301,6 +296,7 @@ async def test_setup_omits_unsupported_wpmsystem_aggregate_runtime_sensors() -> 
         | {description.key for description in WPMSYSTEM_COOLING_SENSOR_TYPES}
         | {description.key for description in WPMSYSTEM_HEATING_EFFICIENCY_SENSOR_TYPES}
         | {description.key for description in WPMSYSTEM_COOLING_EFFICIENCY_SENSOR_TYPES}
+        | {description.key for description in WPMSYSTEM_DHW_EFFICIENCY_SENSOR_TYPES}
         | {description.key for description in WPMSYSTEM_RUNTIME_SENSOR_TYPES}
         | {
             description.key
@@ -319,6 +315,11 @@ async def test_wpmsystem_runtime_fix_does_not_change_unmeasured_models(model) ->
         COMPRESSOR_HEATING_WATER,
         COOLING_RUNTIME,
     } <= entity_keys
+    assert {
+        EFFICIENCY_DHW_1_24_H,
+        EFFICIENCY_DHW_1_12_M,
+        EFFICIENCY_DHW_13_24_M,
+    }.isdisjoint(entity_keys)
 
 
 @pytest.mark.parametrize(
@@ -385,27 +386,17 @@ def test_wpm_3i_target_temperature_hk1_reads_the_shared_field() -> None:
     assert _wpm_3i(TARGET_TEMPERATURE_HK1).modbus_register(api) == 23.4
 
 
-@pytest.mark.parametrize("has_extended_values", [False, True])
-def test_hk3_temperatures_follow_library_component(
-    has_extended_values: bool,
-) -> None:
-    """Read HK3 from its component in either supported library layout."""
+def test_hk3_temperatures_follow_library_component() -> None:
+    """Read HK3 from the optional extended system values component."""
     api = SimpleNamespace(
-        system_values=SimpleNamespace(
-            actual_temperature_hk_3=11.1,
-            set_temperature_hk_3=22.2,
-        )
-    )
-    if has_extended_values:
-        api.extended_system_values = SimpleNamespace(
+        extended_system_values=SimpleNamespace(
             actual_temperature_hk_3=33.3,
             set_temperature_hk_3=44.4,
         )
+    )
 
-    expected_actual = 33.3 if has_extended_values else 11.1
-    expected_target = 44.4 if has_extended_values else 22.2
-    assert _wpm(ACTUAL_TEMPERATURE_HK3).modbus_register(api) == expected_actual
-    assert _wpm(TARGET_TEMPERATURE_HK3).modbus_register(api) == expected_target
+    assert _wpm(ACTUAL_TEMPERATURE_HK3).modbus_register(api) == 33.3
+    assert _wpm(TARGET_TEMPERATURE_HK3).modbus_register(api) == 44.4
 
 
 def test_hk3_temperatures_resolve_on_installed_wpm_api() -> None:
@@ -414,6 +405,25 @@ def test_hk3_temperatures_resolve_on_installed_wpm_api() -> None:
 
     assert _wpm(ACTUAL_TEMPERATURE_HK3).modbus_register(api) is None
     assert _wpm(TARGET_TEMPERATURE_HK3).modbus_register(api) is None
+
+
+async def test_installed_library_counts_the_midnight_transfer_once() -> None:
+    """The cumulative sensor keeps its value while the total books the day first.
+
+    PyPI's yanked 0.10.0 shipped the 0.9.3 code, whose ``max(previous, day +
+    total)`` would report 120 kWh in the second poll (#738).
+    """
+    unit = MockModbusConnection().for_unit(1)
+    api = WpmStiebelEltronAPI(unit)
+    produced_heating = _wpm(PRODUCED_HEATING)
+    readings = []
+    # Day register 3500, total 3501 + 3502 * 1000 (wire addresses).
+    for day, total in ((10, 100), (10, 110), (0, 110), (3, 110)):
+        unit.load_raw({"input": {3500: day, 3501: total % 1000, 3502: total // 1000}})
+        await api.energy_data.async_update()
+        readings.append(produced_heating.modbus_register(api))
+
+    assert readings == [110, 110, 110, 113]
 
 
 def test_lwz_exposes_compressor_frequency() -> None:
@@ -480,8 +490,9 @@ def test_wpm_exposes_power_consumption_statistics() -> None:
         assert desc.modbus_register(api) == value
         assert desc.native_unit_of_measurement == unit
         assert desc.device_class == SensorDeviceClass.ENERGY
-        # Rolling windows reset, so they must not be TOTAL_INCREASING.
-        assert desc.state_class == SensorStateClass.TOTAL
+        # Rolling windows fit no state class: TOTAL would sum the net change of
+        # a window, TOTAL_INCREASING would read a decrease as a reset.
+        assert desc.state_class is None
 
 
 @pytest.mark.parametrize(
@@ -629,7 +640,9 @@ async def test_daily_energy_sensors_do_not_report_poll_time_as_reset(
     model, daily_descriptions
 ) -> None:
     """Day registers must not invent a new reset timestamp on each zero poll."""
-    coordinator = SimpleNamespace(model=model, device_info={})
+    coordinator = SimpleNamespace(
+        model=model, family=CONTROLLER_FAMILIES[model], device_info={}
+    )
     entry = SimpleNamespace(runtime_data=coordinator, entry_id="test")
     entities = []
 
@@ -749,8 +762,9 @@ def test_lwz_exposes_efficiency_statistics() -> None:
         desc = _lwz(key)
         assert desc.modbus_register(api) == value
         assert desc.device_class is None
-        # TODO: Add this test once the values are verified to be correct.
-        # assert desc.state_class == SensorStateClass.MEASUREMENT
+        # The raw LWZ registers get a state class once their scaling has been
+        # confirmed against a device; until then they record no statistics.
+        assert desc.state_class is None
 
 
 def test_inverter_power_reads_the_measured_field() -> None:
@@ -868,7 +882,7 @@ def test_wpmsystem_heating_efficiency_uses_matching_energy_windows() -> None:
     for description in WPMSYSTEM_HEATING_EFFICIENCY_SENSOR_TYPES:
         assert description.modbus_register(api) == expected[description.key]
         assert description.native_unit_of_measurement is None
-        assert description.state_class is None
+        assert description.state_class is SensorStateClass.MEASUREMENT
 
 
 @pytest.mark.parametrize(
@@ -994,7 +1008,96 @@ def test_wpmsystem_cooling_efficiency_uses_matching_energy_windows() -> None:
     for description in WPMSYSTEM_COOLING_EFFICIENCY_SENSOR_TYPES:
         assert description.modbus_register(api) == expected[description.key]
         assert description.native_unit_of_measurement is None
-        assert description.state_class is None
+        assert description.state_class is SensorStateClass.MEASUREMENT
+
+
+def test_wpmsystem_dhw_efficiency_uses_matching_energy_windows() -> None:
+    """Values reported on a WPMsystem; the ISG showed 3.77 for the last 12 months."""
+    api = SimpleNamespace(
+        extended_energy_data=SimpleNamespace(
+            amount_of_heat_dhw_1_24_h__wh_wh=0,
+            dhw_24h=0,
+            amount_of_heat_dhw_1_12_m=1205,
+            dhw_12m=320,
+            amount_of_heat_dhw_13_24_m=0,
+            dhw_13_24=0,
+        )
+    )
+    expected = {
+        EFFICIENCY_DHW_1_24_H: None,
+        EFFICIENCY_DHW_1_12_M: 3.77,
+        EFFICIENCY_DHW_13_24_M: None,
+    }
+    for description in WPMSYSTEM_DHW_EFFICIENCY_SENSOR_TYPES:
+        assert description.modbus_register(api) == expected[description.key]
+        assert description.native_unit_of_measurement is None
+        assert description.state_class is SensorStateClass.MEASUREMENT
+
+
+def test_wpmsystem_dhw_efficiency_pairs_each_window_with_its_own_registers() -> None:
+    """Distinct values per window catch a ratio built from the wrong pair."""
+    api = SimpleNamespace(
+        extended_energy_data=SimpleNamespace(
+            amount_of_heat_dhw_1_24_h__wh_wh=9850,
+            dhw_24h=2400,
+            amount_of_heat_dhw_1_12_m=1205,
+            dhw_12m=320,
+            amount_of_heat_dhw_13_24_m=1100,
+            dhw_13_24=400,
+        )
+    )
+    values = {
+        description.key: description.modbus_register(api)
+        for description in WPMSYSTEM_DHW_EFFICIENCY_SENSOR_TYPES
+    }
+    assert values == {
+        EFFICIENCY_DHW_1_24_H: 4.1,
+        EFFICIENCY_DHW_1_12_M: 3.77,
+        EFFICIENCY_DHW_13_24_M: 2.75,
+    }
+
+
+async def test_wpmsystem_dhw_efficiency_decodes_with_library(
+    mock_modbus_connection,
+) -> None:
+    """Raw window registers decode to the ratio the ISG displayed.
+
+    The 24 h pair carries Wh on both sides, so a ratio needs no conversion,
+    and a 0x8000 in one register of a pair leaves that ratio unavailable.
+    """
+    unit = mock_modbus_connection.for_unit(1)
+    raw = {
+        "input": {
+            address: 0
+            for start, end in WPM_INPUT_RANGES
+            for address in range(start, end + 1)
+        },
+        "holding": {
+            address: 0
+            for start, end in WPM_HOLDING_RANGES
+            for address in range(start, end + 1)
+        },
+    }
+    raw["input"].update({
+        3701: 850,
+        3702: 9,
+        3719: 400,
+        3720: 2,
+        3703: 205,
+        3704: 1,
+        3721: 320,
+        3722: 0,
+        3705: 0x8000,
+        3723: 100,
+    })
+    unit.load_raw(raw)
+    api = WpmStiebelEltronAPI(unit)
+    await api.async_update()
+
+    efficiency = {d.key: d for d in WPMSYSTEM_DHW_EFFICIENCY_SENSOR_TYPES}
+    assert efficiency[EFFICIENCY_DHW_1_24_H].modbus_register(api) == 4.1
+    assert efficiency[EFFICIENCY_DHW_1_12_M].modbus_register(api) == 3.77
+    assert efficiency[EFFICIENCY_DHW_13_24_M].modbus_register(api) is None
 
 
 async def test_wpmsystem_cooling_efficiency_and_runtimes_decode_with_library(
@@ -1020,6 +1123,7 @@ async def test_wpmsystem_cooling_efficiency_and_runtimes_decode_with_library(
         3715: 326,
         3716: 0,
         3643: 2268,
+        3644: 1663,
         3544: 584,
         3545: 0,
         3546: 0,
@@ -1035,6 +1139,7 @@ async def test_wpmsystem_cooling_efficiency_and_runtimes_decode_with_library(
     runtimes = {d.key: d.modbus_register(api) for d in WPMSYSTEM_RUNTIME_SENSOR_TYPES}
     assert runtimes == {
         COMPRESSOR_HEATING_HP_1: 2268,
+        COMPRESSOR_HEATING_WATER_HP_1: 1663,
         COOLING_RUNTIME_HP_1: 584,
         NHZ_1_RUNTIME: 0,
         NHZ_2_RUNTIME: 0,
@@ -1063,7 +1168,7 @@ async def test_wpmsystem_runtimes_follow_the_sentinel_and_come_back(
             for address in range(start, end + 1)
         },
     }
-    counters = {3643: 2268, 3544: 584, 3545: 0, 3546: 0, 3547: 57}
+    counters = {3643: 2268, 3644: 1663, 3544: 584, 3545: 0, 3546: 0, 3547: 57}
     cooling_window = {3697: 29, 3698: 2, 3715: 326, 3716: 0}
     api = WpmStiebelEltronAPI(unit)
 
@@ -1076,10 +1181,10 @@ async def test_wpmsystem_runtimes_follow_the_sentinel_and_come_back(
             [d.modbus_register(api) for d in WPMSYSTEM_COOLING_EFFICIENCY_SENSOR_TYPES],
         )
 
-    expected = ([2268, 584, 0, 0, 57], [None, 6.22, None])
+    expected = ([2268, 1663, 584, 0, 0, 57], [None, 6.22, None])
     assert await read(counters | cooling_window) == expected
     sentinel = dict.fromkeys(counters | cooling_window, 0x8000)
-    assert await read(sentinel) == ([None] * 5, [None] * 3)
+    assert await read(sentinel) == ([None] * 6, [None] * 3)
     assert await read(counters | cooling_window) == expected
 
 
@@ -1088,6 +1193,7 @@ def test_wpmsystem_runtimes_are_hour_counters_with_their_own_keys() -> None:
     keys = {d.key for d in WPMSYSTEM_RUNTIME_SENSOR_TYPES}
     assert keys == {
         COMPRESSOR_HEATING_HP_1,
+        COMPRESSOR_HEATING_WATER_HP_1,
         COOLING_RUNTIME_HP_1,
         NHZ_1_RUNTIME,
         NHZ_2_RUNTIME,

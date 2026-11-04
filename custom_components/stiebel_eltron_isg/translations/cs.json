@@ -66,6 +66,9 @@
         },
         "sg_ready_maximum_operation": {
             "message": "Požadovanou teplotu nelze změnit, dokud je aktivní maximální provoz SG Ready (stav 4): tepelné čerpadlo pak používá maximální teplotu místnosti, omezenou pouze maximální teplotou topného okruhu."
+        },
+        "operating_mode_unknown": {
+            "message": "Toto nastavení nelze změnit, dokud není znám provozní režim tepelného čerpadla."
         }
     },
     "issues": {
@@ -489,6 +492,9 @@
             "compressor_heating_hp_1": {
                 "name": "Kompresor topení tepelné čerpadlo 1"
             },
+            "compressor_heating_water_hp_1": {
+                "name": "Kompresor TUV tepelné čerpadlo 1"
+            },
             "cooling_runtime_hp_1": {
                 "name": "Doba chlazení tepelné čerpadlo 1"
             },
@@ -721,8 +727,20 @@
             "comfort_temperature_target_hk3": {
                 "name": "Denní teplota Soll TO 3"
             },
+            "comfort_temperature_target_hk4": {
+                "name": "Denní teplota Soll TO 4"
+            },
+            "comfort_temperature_target_hk5": {
+                "name": "Denní teplota Soll TO 5"
+            },
             "eco_temperature_target_hk3": {
                 "name": "Noční teplota Soll TO 3"
+            },
+            "eco_temperature_target_hk4": {
+                "name": "Noční teplota Soll TO 4"
+            },
+            "eco_temperature_target_hk5": {
+                "name": "Noční teplota Soll TO 5"
             },
             "dualmode_temperature_hzg": {
                 "name": "Bivalentní teplota topení"
@@ -771,6 +789,12 @@
             },
             "heating_curve_rise_hk3": {
                 "name": "Sklon topné křivky TO 3"
+            },
+            "heating_curve_rise_hk4": {
+                "name": "Sklon topné křivky TO 4"
+            },
+            "heating_curve_rise_hk5": {
+                "name": "Sklon topné křivky TO 5"
             },
             "fan_level_comfort": {
                 "name": "Stupeň ventilátoru den"
@@ -822,6 +846,30 @@
             },
             "sg_ready_load_temperature_water": {
                 "name": "SG Ready teplota nabíjení TUV"
+            },
+            "comfort_temperature_target_hk1_thz": {
+                "name": "Denní teplota Soll TO 1"
+            },
+            "eco_temperature_target_hk1_thz": {
+                "name": "Noční teplota Soll TO 1"
+            },
+            "comfort_temperature_target_hk2_thz": {
+                "name": "Denní teplota Soll TO 2"
+            },
+            "eco_temperature_target_hk2_thz": {
+                "name": "Noční teplota Soll TO 2"
+            },
+            "comfort_temperature_target_hk3_thz": {
+                "name": "Denní teplota Soll TO 3"
+            },
+            "eco_temperature_target_hk3_thz": {
+                "name": "Noční teplota Soll TO 3"
+            },
+            "comfort_water_temperature_target_thz": {
+                "name": "Denní teplota TUV Soll"
+            },
+            "eco_water_temperature_target_thz": {
+                "name": "Noční teplota TUV Soll"
             }
         },
         "switch": {
@@ -842,6 +890,19 @@
         },
         "select": {
             "operation_mode": {
+                "name": "Provozní režim",
+                "state": {
+                    "water_heating": "Ohřev vody",
+                    "emergency": "Nouzový stav",
+                    "program": "Program",
+                    "ready": "Pohotovost",
+                    "automatic": "Automatický",
+                    "manual": "Manuál",
+                    "comfort": "Komfort",
+                    "eco": "Eco"
+                }
+            },
+            "operation_mode_thz": {
                 "name": "Provozní režim",
                 "state": {
                     "water_heating": "Ohřev vody",
@@ -888,6 +949,36 @@
             },
             "climate_hk_3": {
                 "name": "Topný okruh 3",
+                "state_attributes": {
+                    "preset_mode": {
+                        "state": {
+                            "water_heating": "Ohřev vody",
+                            "emergency": "Nouzový stav",
+                            "program": "Program",
+                            "ready": "Pohotovost",
+                            "auto": "Auto",
+                            "manual": "Manuál"
+                        }
+                    }
+                }
+            },
+            "climate_hk_4": {
+                "name": "Topný okruh 4",
+                "state_attributes": {
+                    "preset_mode": {
+                        "state": {
+                            "water_heating": "Ohřev vody",
+                            "emergency": "Nouzový stav",
+                            "program": "Program",
+                            "ready": "Pohotovost",
+                            "auto": "Auto",
+                            "manual": "Manuál"
+                        }
+                    }
+                }
+            },
+            "climate_hk_5": {
+                "name": "Topný okruh 5",
                 "state_attributes": {
                     "preset_mode": {
                         "state": {

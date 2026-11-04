@@ -207,6 +207,12 @@
             "comfort_temperature_target_hk3": {
                 "default": "mdi:thermometer-high"
             },
+            "comfort_temperature_target_hk4": {
+                "default": "mdi:thermometer-high"
+            },
+            "comfort_temperature_target_hk5": {
+                "default": "mdi:thermometer-high"
+            },
             "comfort_water_temperature_target": {
                 "default": "mdi:thermometer-high"
             },
@@ -229,6 +235,12 @@
                 "default": "mdi:thermometer-low"
             },
             "eco_temperature_target_hk3": {
+                "default": "mdi:thermometer-low"
+            },
+            "eco_temperature_target_hk4": {
+                "default": "mdi:thermometer-low"
+            },
+            "eco_temperature_target_hk5": {
                 "default": "mdi:thermometer-low"
             },
             "eco_water_temperature_target": {
@@ -270,6 +282,12 @@
             "heating_curve_rise_hk3": {
                 "default": "mdi:chart-bell-curve-cumulative"
             },
+            "heating_curve_rise_hk4": {
+                "default": "mdi:chart-bell-curve-cumulative"
+            },
+            "heating_curve_rise_hk5": {
+                "default": "mdi:chart-bell-curve-cumulative"
+            },
             "manual_hc_set_hk1": {
                 "default": "mdi:thermometer-lines"
             },
@@ -299,6 +317,30 @@
             },
             "sg_ready_load_temperature_water": {
                 "default": "mdi:thermometer-plus"
+            },
+            "comfort_temperature_target_hk1_thz": {
+                "default": "mdi:thermometer-high"
+            },
+            "eco_temperature_target_hk1_thz": {
+                "default": "mdi:thermometer-low"
+            },
+            "comfort_temperature_target_hk2_thz": {
+                "default": "mdi:thermometer-high"
+            },
+            "eco_temperature_target_hk2_thz": {
+                "default": "mdi:thermometer-low"
+            },
+            "comfort_temperature_target_hk3_thz": {
+                "default": "mdi:thermometer-high"
+            },
+            "eco_temperature_target_hk3_thz": {
+                "default": "mdi:thermometer-low"
+            },
+            "comfort_water_temperature_target_thz": {
+                "default": "mdi:thermometer-high"
+            },
+            "eco_water_temperature_target_thz": {
+                "default": "mdi:thermometer-low"
             }
         },
         "sensor": {

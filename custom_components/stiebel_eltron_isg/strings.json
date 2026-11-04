@@ -71,6 +71,9 @@
         },
         "sg_ready_maximum_operation": {
             "message": "The target temperature cannot be changed while SG Ready maximum operation (state 4) is active: the heat pump then uses its maximum room temperature, limited only by the maximum flow temperature of the heating circuit."
+        },
+        "operating_mode_unknown": {
+            "message": "This setting cannot be changed while the operating mode of the heat pump is unknown."
         }
     },
     "issues": {
@@ -494,6 +497,9 @@
             "compressor_heating_hp_1": {
                 "name": "Compressor Heating Heat Pump 1"
             },
+            "compressor_heating_water_hp_1": {
+                "name": "Compressor Heating Water Heat Pump 1"
+            },
             "cooling_runtime_hp_1": {
                 "name": "Cooling Runtime Heat Pump 1"
             },
@@ -726,8 +732,20 @@
             "comfort_temperature_target_hk3": {
                 "name": "Comfort Temperature Target HK3"
             },
+            "comfort_temperature_target_hk4": {
+                "name": "Comfort Temperature Target HK4"
+            },
+            "comfort_temperature_target_hk5": {
+                "name": "Comfort Temperature Target HK5"
+            },
             "eco_temperature_target_hk3": {
                 "name": "Eco Temperature Target HK3"
+            },
+            "eco_temperature_target_hk4": {
+                "name": "Eco Temperature Target HK4"
+            },
+            "eco_temperature_target_hk5": {
+                "name": "Eco Temperature Target HK5"
             },
             "dualmode_temperature_hzg": {
                 "name": "Dual Mode Temperature HZG"
@@ -776,6 +794,12 @@
             },
             "heating_curve_rise_hk3": {
                 "name": "Heating Curve Rise HK3"
+            },
+            "heating_curve_rise_hk4": {
+                "name": "Heating Curve Rise HK4"
+            },
+            "heating_curve_rise_hk5": {
+                "name": "Heating Curve Rise HK5"
             },
             "fan_level_comfort": {
                 "name": "Fan Level Day"
@@ -827,6 +851,30 @@
             },
             "sg_ready_load_temperature_water": {
                 "name": "SG Ready Load Temperature Water"
+            },
+            "comfort_temperature_target_hk1_thz": {
+                "name": "Comfort Temperature Target HK1"
+            },
+            "eco_temperature_target_hk1_thz": {
+                "name": "Eco Temperature Target HK1"
+            },
+            "comfort_temperature_target_hk2_thz": {
+                "name": "Comfort Temperature Target HK2"
+            },
+            "eco_temperature_target_hk2_thz": {
+                "name": "Eco Temperature Target HK2"
+            },
+            "comfort_temperature_target_hk3_thz": {
+                "name": "Comfort Temperature Target HK3"
+            },
+            "eco_temperature_target_hk3_thz": {
+                "name": "Eco Temperature Target HK3"
+            },
+            "comfort_water_temperature_target_thz": {
+                "name": "Comfort Water Temperature Target"
+            },
+            "eco_water_temperature_target_thz": {
+                "name": "Eco Water Temperature Target"
             }
         },
         "switch": {
@@ -847,6 +895,19 @@
         },
         "select": {
             "operation_mode": {
+                "name": "Operation Mode",
+                "state": {
+                    "water_heating": "Water heating",
+                    "emergency": "Emergency",
+                    "program": "Program",
+                    "ready": "Standby",
+                    "automatic": "Automatic",
+                    "manual": "Manual",
+                    "comfort": "Comfort",
+                    "eco": "Eco"
+                }
+            },
+            "operation_mode_thz": {
                 "name": "Operation Mode",
                 "state": {
                     "water_heating": "Water heating",
@@ -893,6 +954,36 @@
             },
             "climate_hk_3": {
                 "name": "Heat Circuit 3",
+                "state_attributes": {
+                    "preset_mode": {
+                        "state": {
+                            "water_heating": "Water heating",
+                            "emergency": "Emergency",
+                            "program": "Program",
+                            "ready": "Standby",
+                            "auto": "Auto",
+                            "manual": "Manual"
+                        }
+                    }
+                }
+            },
+            "climate_hk_4": {
+                "name": "Heat Circuit 4",
+                "state_attributes": {
+                    "preset_mode": {
+                        "state": {
+                            "water_heating": "Water heating",
+                            "emergency": "Emergency",
+                            "program": "Program",
+                            "ready": "Standby",
+                            "auto": "Auto",
+                            "manual": "Manual"
+                        }
+                    }
+                }
+            },
+            "climate_hk_5": {
+                "name": "Heat Circuit 5",
                 "state_attributes": {
                     "preset_mode": {
                         "state": {

@@ -9,6 +9,7 @@ from modbus_connection.model import Component, Raw, boolean, gauge, integer
 
 from . import UNAVAILABLE, in_range, scaled_sum
 from ._components import ControllerComponents
+from ._day_and_total import DayAndTotalCounter
 
 LWZ_HOLDING_RANGES = ((1000, 1026), (4000, 4002), (4249, 4251), (4253, 4258), (4271, 4277))
 LWZ_INPUT_RANGES = ((0, 33), (2000, 2004), (3000, 3031), (3679, 3679), (3689, 3697), (5000, 5001), (5219, 5221), (5229, 5230))
@@ -104,7 +105,7 @@ class LwzSystemParameters(Component):
     room_temperature_night_hk1_cooling = gauge(1022, 0.1, nan=UNAVAILABLE, unit="°C", writable=in_range(10, 30))
     room_temperature_day_hk2_cooling = gauge(1023, 0.1, nan=UNAVAILABLE, unit="°C", writable=in_range(10, 30))
     room_temperature_night_hk2_cooling = gauge(1024, 0.1, nan=UNAVAILABLE, unit="°C", writable=in_range(10, 30))
-    reset = boolean(1025, nan=UNAVAILABLE, writable=True)
+    reset = boolean(1025, nan=UNAVAILABLE, writable=in_range(0, 1))
     restart_isg = integer(1026, signed=False, nan=UNAVAILABLE, writable=in_range(0, 2))
 
 
@@ -158,7 +159,7 @@ class LwzEnergyData(Component):
 
     def __init__(self, unit: ModbusUnit, index: int = 1) -> None:
         super().__init__(unit, index)
-        self._running_totals: dict[str, int] = {}
+        self._day_and_total = {key: DayAndTotalCounter() for _, _, key in self._DAY_AND_TOTAL}
 
     def notify(self) -> None:
         """Refresh the monotonic day-and-total counters, then notify listeners."""
@@ -166,61 +167,59 @@ class LwzEnergyData(Component):
             day = getattr(self, day_attr)
             total = getattr(self, total_attr)
             if day is not None and total is not None:
-                combined = day + total
-                previous = self._running_totals.get(key)
-                self._running_totals[key] = combined if previous is None else max(combined, previous)
+                self._day_and_total[key].update(day, total)
         super().notify()
 
     @property
     def heat_meter_htg_day_and_total(self) -> int | None:
         if self.heat_meter_htg_day is None or self.heat_meter_htg_ttl is None:
             return None
-        return self._running_totals.get("heat_meter_htg_day_and_total")
+        return self._day_and_total["heat_meter_htg_day_and_total"].value
 
     @property
     def heat_meter_dhw_day_and_total(self) -> int | None:
         if self.heat_meter_dhw_day is None or self.heat_meter_dhw_ttl is None:
             return None
-        return self._running_totals.get("heat_meter_dhw_day_and_total")
+        return self._day_and_total["heat_meter_dhw_day_and_total"].value
 
     @property
     def heat_m_recovery_day_and_total(self) -> int | None:
         if self.heat_m_recovery_day is None or self.heat_m_recovery_ttl is None:
             return None
-        return self._running_totals.get("heat_m_recovery_day_and_total")
+        return self._day_and_total["heat_m_recovery_day_and_total"].value
 
     @property
     def hm_solar_htg_day_and_total(self) -> int | None:
         if self.hm_solar_htg_day is None or self.hm_solar_htg_total is None:
             return None
-        return self._running_totals.get("hm_solar_htg_day_and_total")
+        return self._day_and_total["hm_solar_htg_day_and_total"].value
 
     @property
     def hm_solar_dhw_day_and_total(self) -> int | None:
         if self.hm_solar_dhw_day is None or self.hm_solar_dwh_total is None:
             return None
-        return self._running_totals.get("hm_solar_dhw_day_and_total")
+        return self._day_and_total["hm_solar_dhw_day_and_total"].value
 
     @property
     def pwr_con_htg_day_and_total(self) -> int | None:
         if self.pwr_con_htg_day is None or self.pwr_con_htg_ttl is None:
             return None
-        return self._running_totals.get("pwr_con_htg_day_and_total")
+        return self._day_and_total["pwr_con_htg_day_and_total"].value
 
     @property
     def pwr_con_dhw_day_and_total(self) -> int | None:
         if self.pwr_con_dhw_day is None or self.pwr_con_dhw_ttl is None:
             return None
-        return self._running_totals.get("pwr_con_dhw_day_and_total")
+        return self._day_and_total["pwr_con_dhw_day_and_total"].value
 
 
 class LwzEnergyManagementSettings(Component):
     register_space = "holding"
     register_ranges = LWZ_HOLDING_RANGES
 
-    switch_sg_ready_on_and_off = boolean(4000, nan=UNAVAILABLE, writable=True)
-    sg_ready_input_1 = boolean(4001, nan=UNAVAILABLE, writable=True)
-    sg_ready_input_2 = boolean(4002, nan=UNAVAILABLE, writable=True)
+    switch_sg_ready_on_and_off = boolean(4000, nan=UNAVAILABLE, writable=in_range(0, 1))
+    sg_ready_input_1 = boolean(4001, nan=UNAVAILABLE, writable=in_range(0, 1))
+    sg_ready_input_2 = boolean(4002, nan=UNAVAILABLE, writable=in_range(0, 1))
 
 
 class LwzEnergySystemInformation(Component):
@@ -362,7 +361,12 @@ class LwzStiebelEltronAPI:
         return self.system_values.relative_humidity_hc1
 
     def get_operation(self) -> OperatingMode:
-        """Return the current mode of operation."""
+        """Return the current mode of operation.
+
+        Reads as ``EMERGENCY_OPERATION`` before the first poll and while the
+        register is unavailable. Raises ``ValueError`` for a code the
+        :class:`OperatingMode` enum does not list.
+        """
         op_mode = self.system_parameters.operating_mode
         if op_mode is None:
             return OperatingMode.EMERGENCY_OPERATION

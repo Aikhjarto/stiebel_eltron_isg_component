@@ -5,13 +5,14 @@ from unittest.mock import MagicMock, PropertyMock, patch
 
 from homeassistant.const import CONF_HOST, CONF_PORT
 from modbus_connection.mock import MockModbusConnection
-from pystiebeleltron import ControllerModel, wpm as wpm_module
+from pystiebeleltron import ControllerModel
 from pystiebeleltron.lwz import OperatingMode
 from pystiebeleltron.wpm import (
     WpmEnergyData,
     WpmEnergyManagementSettings,
     WpmEnergySystemInformation,
     WpmExtendedEnergyData,
+    WpmExtendedSystemValues,
     WpmSystemParameters,
     WpmSystemState,
     WpmSystemValues,
@@ -84,7 +85,7 @@ def mock_lwz_api() -> Generator[MagicMock]:
     """Patch the LWZ API and return the mocked client."""
 
     with patch(
-        "custom_components.stiebel_eltron_isg.lwz_coordinator.LwzStiebelEltronAPI",
+        "custom_components.stiebel_eltron_isg.coordinator.LwzStiebelEltronAPI",
         autospec=True,
     ) as mock_api_cls:
         api_client = mock_api_cls.return_value
@@ -105,7 +106,7 @@ def mock_wpm_3i_api() -> Generator[MagicMock]:
     """Patch the WPM API and return the mocked client."""
 
     with patch(
-        "custom_components.stiebel_eltron_isg.wpm3i_coordinator.Wpm3iStiebelEltronAPI",
+        "custom_components.stiebel_eltron_isg.coordinator.Wpm3iStiebelEltronAPI",
         autospec=True,
     ) as mock_api_cls:
         api_client = mock_api_cls.return_value
@@ -135,7 +136,7 @@ def mock_wpm_api() -> Generator[MagicMock]:
     """Patch the WPM API and return the mocked client."""
 
     with patch(
-        "custom_components.stiebel_eltron_isg.wpm_coordinator.WpmStiebelEltronAPI",
+        "custom_components.stiebel_eltron_isg.coordinator.WpmStiebelEltronAPI",
         autospec=True,
     ) as mock_api_cls:
         api_client = mock_api_cls.return_value
@@ -163,10 +164,9 @@ def mock_wpm_api() -> Generator[MagicMock]:
         type(api_client).system_values = PropertyMock(
             return_value=MagicMock(spec=WpmSystemValues)
         )
-        if hasattr(wpm_module, "WpmExtendedSystemValues"):
-            type(api_client).extended_system_values = PropertyMock(
-                return_value=MagicMock(spec=wpm_module.WpmExtendedSystemValues)
-            )
+        type(api_client).extended_system_values = PropertyMock(
+            return_value=MagicMock(spec=WpmExtendedSystemValues)
+        )
         yield api_client
 
 

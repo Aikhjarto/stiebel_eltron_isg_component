@@ -1,7 +1,5 @@
 """Tests for the migration of legacy entity unique ids."""
 
-from typing import cast
-
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.const import CONF_HOST, CONF_NAME, CONF_PORT
 from homeassistant.core import HomeAssistant
@@ -34,31 +32,13 @@ MODEL_NAME = "Stiebel Eltron WPM_3"
 KEY = "outdoor_temperature"
 
 
-class _LegacyDeviceRegistry:
-    """Model the identifier lookup available before Home Assistant 2026.8."""
-
-    def __init__(self, device: dr.DeviceEntry) -> None:
-        """Store the device returned by the legacy global lookup."""
-        self.device = device
-        self.identifiers: set[tuple[str, str]] | None = None
-
-    def async_get_device(
-        self, identifiers: set[tuple[str, str]] | None = None
-    ) -> dr.DeviceEntry:
-        """Return the configured device and record the requested identifiers."""
-        self.identifiers = identifiers
-        return self.device
-
-
 def _get_device_by_identifier(
     registry: dr.DeviceRegistry,
     identifier: tuple[str, str],
     config_entry_id: str,
 ) -> dr.DeviceEntry | None:
-    """Look up a test device across supported Home Assistant versions."""
-    if hasattr(registry, "async_get_device_by_identifier"):
-        return registry.async_get_device_by_identifier(identifier, config_entry_id)
-    return registry.async_get_device(identifiers={identifier})
+    """Look up the test device of one config entry by identifier."""
+    return registry.async_get_device_by_identifier(identifier, config_entry_id)
 
 
 @pytest.fixture
@@ -70,21 +50,6 @@ def config_entry_with_name() -> MockConfigEntry:
         data={CONF_HOST: "1.1.1.1", CONF_PORT: 502, CONF_NAME: "My Heatpump"},
         entry_id="stiebel_eltron_002",
     )
-
-
-def test_device_lookup_falls_back_before_home_assistant_2026_8() -> None:
-    """The compatibility path keeps the HACS minimum version working."""
-    device = cast("dr.DeviceEntry", object())
-    legacy_registry = _LegacyDeviceRegistry(device)
-
-    result = migration._async_get_device_by_identifier(
-        cast("dr.DeviceRegistry", legacy_registry),
-        (DOMAIN, "My Heatpump"),
-        "stiebel_eltron_002",
-    )
-
-    assert result is device
-    assert legacy_registry.identifiers == {(DOMAIN, "My Heatpump")}
 
 
 @pytest.mark.parametrize(
@@ -987,16 +952,15 @@ async def test_a_disabled_replacement_device_does_not_disable_the_original(
     assert restored.disabled_by is None
 
 
-async def test_a_shared_replacement_device_is_left_alone(
+async def test_another_entrys_device_with_the_same_identifier_is_left_alone(
     hass: HomeAssistant,
     config_entry_with_name: MockConfigEntry,
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    """A device another config entry also belongs to is never removed.
+    """Only this entry's replacement device is replaced by the migration.
 
-    Home Assistant 2026.8 stores one device per config entry, so only this
-    entry's replacement may be adopted. Older releases store the config entries
-    directly on one device, which must remain untouched when it is shared.
+    Home Assistant stores one device per config entry, so another entry can
+    hold a device with the same identifier. That device must remain untouched.
     """
     config_entry_with_name.add_to_hass(hass)
     stranger = MockConfigEntry(domain=DOMAIN, title="Something else")
@@ -1012,41 +976,32 @@ async def test_a_shared_replacement_device_is_left_alone(
         identifiers={(DOMAIN, config_entry_with_name.entry_id)},
         name=MODEL_NAME,
     )
-    if hasattr(device_registry, "async_get_device_by_identifier"):
-        stranger_replacement = device_registry.async_get_or_create(
-            config_entry_id=stranger.entry_id,
-            identifiers={(DOMAIN, config_entry_with_name.entry_id)},
-            name=MODEL_NAME,
+    stranger_replacement = device_registry.async_get_or_create(
+        config_entry_id=stranger.entry_id,
+        identifiers={(DOMAIN, config_entry_with_name.entry_id)},
+        name=MODEL_NAME,
+    )
+    assert (
+        device_registry.async_get_device_by_identifier(
+            (DOMAIN, config_entry_with_name.entry_id),
+            config_entry_with_name.entry_id,
         )
-        assert (
-            device_registry.async_get_device_by_identifier(
-                (DOMAIN, config_entry_with_name.entry_id),
-                config_entry_with_name.entry_id,
-            )
-            == replacement
+        == replacement
+    )
+    assert (
+        device_registry.async_get_device_by_identifier(
+            (DOMAIN, config_entry_with_name.entry_id), stranger.entry_id
         )
-        assert (
-            device_registry.async_get_device_by_identifier(
-                (DOMAIN, config_entry_with_name.entry_id), stranger.entry_id
-            )
-            == stranger_replacement
-        )
-    else:
-        device_registry.async_update_device(
-            replacement.id, add_config_entry_id=stranger.entry_id
-        )
-        stranger_replacement = replacement
+        == stranger_replacement
+    )
 
     assert await hass.config_entries.async_setup(config_entry_with_name.entry_id)
     await hass.async_block_till_done()
 
     assert device_registry.async_get(stranger_replacement.id) is not None
     assert device_registry.async_get(legacy.id) is not None
-    if stranger_replacement.id == replacement.id:
-        assert "shared with" in caplog.text
-    else:
-        assert device_registry.async_get(replacement.id) is None
-        assert "shared with" not in caplog.text
+    assert device_registry.async_get(replacement.id) is None
+    assert "belongs to" not in caplog.text
 
 
 async def test_a_disabled_or_customised_entity_keeps_everything(
@@ -1299,3 +1254,73 @@ def test_runtime_sensor_cleanup_covers_a_previously_detected_model(
     )
 
     assert er.async_get(hass).async_get(previous_model.entity_id) is None
+
+
+async def test_a_historical_model_id_migrates_without_changing_the_entity_id(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+) -> None:
+    """A controller detected as another model before the update is migrated."""
+    mock_config_entry.add_to_hass(hass)
+    existing = _register(
+        hass,
+        mock_config_entry,
+        f"{DOMAIN}_Stiebel Eltron WPM_3i_{KEY}",
+        "wpm_3i_outdoor_temperature",
+    )
+
+    await migration.async_migrate_unique_ids(
+        hass, mock_config_entry, ControllerModel.WPMsystem
+    )
+
+    migrated = er.async_get(hass).async_get(existing.entity_id)
+    assert migrated is not None
+    assert migrated.unique_id == f"{mock_config_entry.entry_id}_{KEY}"
+    assert migrated.entity_id == existing.entity_id
+
+
+async def test_current_model_id_wins_over_a_historical_model_id(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+) -> None:
+    """The current model outranks an earlier one and the loser is reported."""
+    mock_config_entry.add_to_hass(hass)
+    historical = _register(
+        hass,
+        mock_config_entry,
+        f"{DOMAIN}_Stiebel Eltron WPM_3i_{KEY}",
+        "wpm_3i_outdoor_temperature",
+    )
+    current = _register(
+        hass,
+        mock_config_entry,
+        f"{DOMAIN}_Stiebel Eltron WPMsystem_{KEY}",
+        "wpmsystem_outdoor_temperature",
+    )
+
+    losers = migration.async_get_duplicate_entities(
+        hass, mock_config_entry, ControllerModel.WPMsystem
+    )
+    assert [loser.entity_id for loser in losers] == [historical.entity_id]
+
+    await migration.async_migrate_unique_ids(
+        hass, mock_config_entry, ControllerModel.WPMsystem
+    )
+
+    registry = er.async_get(hass)
+    assert (
+        registry.async_get(current.entity_id).unique_id
+        == f"{mock_config_entry.entry_id}_{KEY}"
+    )
+    assert (
+        registry.async_get(historical.entity_id).unique_id
+        == f"{DOMAIN}_Stiebel Eltron WPM_3i_{KEY}"
+    )
+    issue = ir.async_get(hass).async_get_issue(
+        DOMAIN, f"duplicate_entities_{mock_config_entry.entry_id}"
+    )
+    assert issue is not None
+    assert issue.translation_placeholders == {
+        "count": "1",
+        "entities": historical.entity_id,
+    }
