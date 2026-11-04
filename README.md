@@ -106,6 +106,21 @@ the total register and retains the fractional remainder in the day register.
 Treating that remainder as a reset to zero would count part of the energy
 twice.
 
+A WPMsystem has been seen to add the day value to the total register one
+poll before it resets the day register. Since
+[ThyMYthOS/python-stiebel-eltron#108](https://github.com/ThyMYthOS/python-stiebel-eltron/pull/108)
+the cumulative counter holds such a rise of the total back until the day
+register resets, so the day is counted once. Before that fix the counter ran
+ahead by up to the previous day's value until the current day caught up, and
+on the first restart with the fix it starts from the registers again, lower by
+that amount, as a restart did before while the counter was ahead. Home
+Assistant subtracts a drop of up to 10 % from that hour's statistics, which
+removes the extra energy, and treats a larger drop as a counter reset, which
+keeps it.
+Restarting in the evening, once today's consumption exceeds yesterday's,
+avoids the drop. Wrong hours can be corrected under **Developer Tools →
+Statistics → Adjust sum**.
+
 The separate **Total** sensors remain cumulative alternatives. Which energy
 entities are available depends on the connected controller.
 
@@ -125,18 +140,29 @@ The 24-hour values are both Wh;
 the 12-month values are both kWh. These windows differ from calendar-day
 counters. WPMsystem and LWZ R290 heat-window sensors require the extended
 energy registers and have no state class, so they create no long-term
-statistics.
+statistics. The same applies to the power-consumption windows of WPMsystem,
+WPM 3 and LWZ R290 (**Consumed heating/cooling/water heating last 24 h, 12 m,
+previous 12 m**): a rolling window fits no state class, since a long-term sum
+would track the net change of the window, not consumption. Installations that
+recorded statistics for them under the earlier `total` state class may see a
+fixable `state_class_removed` issue under **Developer Tools → Statistics**;
+deleting that statistic removes the misleading long-term sum, not the entity's
+state history. The nine WPMsystem efficiency ratios do record statistics as
+measurements; the mean of a window ratio is a trend indicator, not a COP
+recomputed over the whole period.
 
 For WPMsystem, the three cooling efficiency sensors are calculated the same
 way from the matching cooling windows. A window without cooling reads zero
 heat and zero electricity, so its sensor stays unavailable while the ISG
-shows 0.00.
+shows 0.00. The three water heating efficiency sensors follow the same rule
+with the water heating windows.
 
 WPMsystem also offers runtime counters: **Compressor Heating Heat Pump 1**,
-**Cooling Runtime Heat Pump 1**, and **NHZ 1 Runtime**, **NHZ 2 Runtime** and
-**NHZ 1/2 Runtime** for the electric reheating stages. On a cascade, the first
-two count heat pump 1 only. A hot water runtime is not offered yet because it
-has not been verified on hardware.
+**Compressor Heating Water Heat Pump 1**, **Cooling Runtime Heat Pump 1**, and
+**NHZ 1 Runtime**, **NHZ 2 Runtime** and **NHZ 1/2 Runtime** for the electric
+reheating stages. On a cascade, the first three count heat pump 1 only. An
+installation that heats its hot water with a separate DHW heat pump does not
+serve the hot water counter, so that sensor stays unavailable there.
 
 ## SG Ready and the climate targets
 
@@ -197,6 +223,17 @@ Write errors are returned to the Home Assistant action that initiated them.
 The integration cannot update ISG firmware. Firmware updates are handled
 through Stiebel Eltron support. It also cannot make a register writable when
 the connected controller or firmware exposes it as read-only.
+
+## Upcoming update: optional heating circuit 3
+
+The planned minimum is Home Assistant 2026.11.0 with the compatible shared Modbus backend.
+The update remains unreleased until Home Assistant 2026.11.0 is released; the minimum version will be checked against that release before publication.
+No reconfiguration is needed for a normal installation.
+
+This update uses pystiebeleltron 0.10.1, which reads the heating circuit 3 registers as an optional block and books the midnight transfer of the cumulative energy counters once.
+If a controller rejects the start of a block, the library retries once from a lower address the controller answered in the same poll.
+Controllers that still reject this block complete setup instead of failing, and the heating circuit 3 temperature sensors stay unavailable.
+If a block that was read successfully is later rejected, even after the retry, polls fail and all entities of the integration are unavailable until the controller answers the block again. Reload the integration if this persists.
 
 ## Upgrading to 2026.9
 

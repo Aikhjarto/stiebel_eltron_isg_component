@@ -26,6 +26,7 @@ from custom_components.stiebel_eltron_isg.const import (
     SG_READY_LOAD_TEMPERATURE_WATER,
     UNIT_ID,
 )
+from custom_components.stiebel_eltron_isg.coordinator import CONTROLLER_FAMILIES
 from custom_components.stiebel_eltron_isg.entity import build_unique_id
 
 # key, holding register (0-based like the library), raw value, ISG range
@@ -79,7 +80,7 @@ async def test_wpmsystem_load_temperatures_read_and_write(
         )
 
     with patch(
-        "custom_components.stiebel_eltron_isg.wpm_coordinator.WpmStiebelEltronAPI",
+        "custom_components.stiebel_eltron_isg.coordinator.WpmStiebelEltronAPI",
         return_value=api,
     ):
         assert await hass.config_entries.async_setup(mock_config_entry.entry_id)
@@ -138,7 +139,9 @@ def test_hk4_and_hk5_load_temperatures_are_disabled_by_default() -> None:
 )
 async def test_load_temperatures_only_on_the_wpm_family(model, expected) -> None:
     """WPM 3i and LWZ do not get the WPM load temperature registers."""
-    entry = SimpleNamespace(runtime_data=SimpleNamespace(model=model))
+    entry = SimpleNamespace(
+        runtime_data=SimpleNamespace(model=model, family=CONTROLLER_FAMILIES[model])
+    )
     add_entities = MagicMock()
     with patch.object(
         number_module,

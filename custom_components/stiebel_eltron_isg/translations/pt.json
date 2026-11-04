@@ -66,6 +66,9 @@
         },
         "sg_ready_maximum_operation": {
             "message": "A temperatura alvo não pode ser alterada durante o funcionamento máximo SG Ready (estado 4): a bomba de calor usa então a temperatura ambiente máxima, limitada apenas pela temperatura máxima do circuito de aquecimento."
+        },
+        "operating_mode_unknown": {
+            "message": "Esta definição não pode ser alterada enquanto o modo de funcionamento da bomba de calor for desconhecido."
         }
     },
     "issues": {
@@ -489,6 +492,9 @@
             "compressor_heating_hp_1": {
                 "name": "Compressor aquecimento bomba de calor 1"
             },
+            "compressor_heating_water_hp_1": {
+                "name": "Compressor AQS bomba de calor 1"
+            },
             "cooling_runtime_hp_1": {
                 "name": "Tempo arrefecimento bomba de calor 1"
             },
@@ -721,8 +727,20 @@
             "comfort_temperature_target_hk3": {
                 "name": "Temperatura alvo conforto CC 3"
             },
+            "comfort_temperature_target_hk4": {
+                "name": "Temperatura alvo conforto CC 4"
+            },
+            "comfort_temperature_target_hk5": {
+                "name": "Temperatura alvo conforto CC 5"
+            },
             "eco_temperature_target_hk3": {
                 "name": "Temperatura alvo eco CC 3"
+            },
+            "eco_temperature_target_hk4": {
+                "name": "Temperatura alvo eco CC 4"
+            },
+            "eco_temperature_target_hk5": {
+                "name": "Temperatura alvo eco CC 5"
             },
             "dualmode_temperature_hzg": {
                 "name": "Temperatura de bivalência aquecimento"
@@ -771,6 +789,12 @@
             },
             "heating_curve_rise_hk3": {
                 "name": "Inclinação curva de aquecimento CC 3"
+            },
+            "heating_curve_rise_hk4": {
+                "name": "Inclinação curva de aquecimento CC 4"
+            },
+            "heating_curve_rise_hk5": {
+                "name": "Inclinação curva de aquecimento CC 5"
             },
             "fan_level_comfort": {
                 "name": "Nível ventilador dia"
@@ -822,6 +846,30 @@
             },
             "sg_ready_load_temperature_water": {
                 "name": "Temperatura de carga SG Ready AQS"
+            },
+            "comfort_temperature_target_hk1_thz": {
+                "name": "Temperatura alvo conforto CC 1"
+            },
+            "eco_temperature_target_hk1_thz": {
+                "name": "Temperatura alvo eco CC 1"
+            },
+            "comfort_temperature_target_hk2_thz": {
+                "name": "Temperatura alvo conforto CC 2"
+            },
+            "eco_temperature_target_hk2_thz": {
+                "name": "Temperatura alvo eco CC 2"
+            },
+            "comfort_temperature_target_hk3_thz": {
+                "name": "Temperatura alvo conforto CC 3"
+            },
+            "eco_temperature_target_hk3_thz": {
+                "name": "Temperatura alvo eco CC 3"
+            },
+            "comfort_water_temperature_target_thz": {
+                "name": "Temperatura alvo AQS conforto"
+            },
+            "eco_water_temperature_target_thz": {
+                "name": "Temperatura alvo AQS eco"
             }
         },
         "switch": {
@@ -842,6 +890,19 @@
         },
         "select": {
             "operation_mode": {
+                "name": "Modo de funcionamento",
+                "state": {
+                    "water_heating": "Aquecimento de água",
+                    "emergency": "Emergência",
+                    "program": "Programa",
+                    "ready": "Pronto",
+                    "automatic": "Automático",
+                    "manual": "Manual",
+                    "comfort": "Conforto",
+                    "eco": "Eco"
+                }
+            },
+            "operation_mode_thz": {
                 "name": "Modo de funcionamento",
                 "state": {
                     "water_heating": "Aquecimento de água",
@@ -888,6 +949,36 @@
             },
             "climate_hk_3": {
                 "name": "Circuito aquecimento 3",
+                "state_attributes": {
+                    "preset_mode": {
+                        "state": {
+                            "water_heating": "Aquecimento de água",
+                            "emergency": "Emergência",
+                            "program": "Programa",
+                            "ready": "Pronto",
+                            "auto": "Automático",
+                            "manual": "Manual"
+                        }
+                    }
+                }
+            },
+            "climate_hk_4": {
+                "name": "Circuito aquecimento 4",
+                "state_attributes": {
+                    "preset_mode": {
+                        "state": {
+                            "water_heating": "Aquecimento de água",
+                            "emergency": "Emergência",
+                            "program": "Programa",
+                            "ready": "Pronto",
+                            "auto": "Automático",
+                            "manual": "Manual"
+                        }
+                    }
+                }
+            },
+            "climate_hk_5": {
+                "name": "Circuito aquecimento 5",
                 "state_attributes": {
                     "preset_mode": {
                         "state": {

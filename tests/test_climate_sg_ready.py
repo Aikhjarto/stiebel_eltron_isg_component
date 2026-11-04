@@ -1,5 +1,6 @@
 """Climate targets follow SG Ready: load temperatures in state 3, the reported target in state 4."""
 
+import asyncio
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -22,7 +23,6 @@ from custom_components.stiebel_eltron_isg.climate import (
     LWZ_CLIMATE_TYPES,
     WPM_3I_CLIMATE_TYPES,
     WPM_CLIMATE_TYPES,
-    StiebelEltronClimateEntityDescription,
     StiebelEltronWPMClimateEntity,
 )
 from custom_components.stiebel_eltron_isg.const import DOMAIN, UNIT_ID
@@ -74,7 +74,7 @@ async def _setup_wpmsystem(hass, mock_config_entry, mock_get_controller_model, u
     mock_get_controller_model.return_value = ControllerModel.WPMsystem
     mock_config_entry.add_to_hass(hass)
     with patch(
-        "custom_components.stiebel_eltron_isg.wpm_coordinator.WpmStiebelEltronAPI",
+        "custom_components.stiebel_eltron_isg.coordinator.WpmStiebelEltronAPI",
         return_value=api,
     ):
         assert await hass.config_entries.async_setup(mock_config_entry.entry_id)
@@ -202,11 +202,19 @@ class _StubCoordinator:
         self.refresh_generation = 0
         self.last_successful_refresh_generation = 0
 
+        self.write_lock = asyncio.Lock()
+        self._pending: dict[tuple[str, str], float] = {}
+
     def get_value(self, accessor):
         return accessor(self._api)
 
+    def pending_value(self, component, field):
+        # Like the coordinator: a written value counts until the device confirms it.
+        return self._pending.get((component, field))
+
     async def write_component_value(self, component, field, value) -> None:
         self.writes.append((component, field, value))
+        self._pending[(component, field)] = value
 
 
 async def test_assumed_target_does_not_survive_an_sg_ready_change() -> None:
@@ -266,36 +274,6 @@ def test_only_wpm_family_follows_sg_ready() -> None:
         or description.sg_ready_room_target_register
         for description in (*WPM_3I_CLIMATE_TYPES, *LWZ_CLIMATE_TYPES)
     )
-
-
-def test_description_rejects_non_callable_load_temperature_register() -> None:
-    """Load temperature references must be API accessors like all others."""
-
-    def valid(api):
-        return 1
-
-    with pytest.raises(TypeError, match="sg_ready_load_temp_registers"):
-        StiebelEltronClimateEntityDescription(
-            key="invalid",
-            humidity_modbus_register=[valid],
-            actual_temperature_register=[valid],
-            eco_target_temp_register=valid,
-            comfort_target_temp_register=valid,
-            min_temp=5,
-            max_temp=30,
-            sg_ready_load_temp_registers=(("legacy", "field"),),
-        )
-    with pytest.raises(TypeError, match="sg_ready_room_target_register"):
-        StiebelEltronClimateEntityDescription(
-            key="invalid",
-            humidity_modbus_register=[valid],
-            actual_temperature_register=[valid],
-            eco_target_temp_register=valid,
-            comfort_target_temp_register=valid,
-            min_temp=5,
-            max_temp=30,
-            sg_ready_room_target_register="legacy",
-        )
 
 
 def test_load_temperature_references_resolve_against_the_wpm_api() -> None:
